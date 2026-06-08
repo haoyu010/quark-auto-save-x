@@ -2373,6 +2373,12 @@ def ensure_push_config_defaults(data):
     if not isinstance(push_config, dict):
         push_config = {}
         data["push_config"] = push_config
+    if "TG_ENABLED" not in push_config:
+        push_config["TG_ENABLED"] = (
+            "enabled"
+            if push_config.get("TG_BOT_TOKEN") and push_config.get("TG_USER_ID")
+            else "disabled"
+        )
     for key, value in TELEGRAM_PUSH_DEFAULTS.items():
         push_config.setdefault(key, value)
     return push_config
