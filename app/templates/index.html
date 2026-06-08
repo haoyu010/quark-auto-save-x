@@ -422,7 +422,7 @@
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="https://github.com/x1ao4/quark-auto-save-x/releases" target="_blank">
+                <a class="nav-link" href="https://github.com/haoyu010/quark-auto-save-x/releases" target="_blank">
                   <i class="bi bi-github"></i>
                   <span class="nav-text"><span v-html="versionTips"></span></span>
                 </a>
@@ -9331,7 +9331,7 @@
           
           // 延迟检查版本，避免阻塞页面加载，并添加错误处理
           setTimeout(() => {
-            axios.get('https://api.github.com/repos/x1ao4/quark-auto-save-x/tags', {
+            axios.get('https://api.github.com/repos/haoyu010/quark-auto-save-x/tags', {
               timeout: 5000, // 5秒超时
               validateStatus: function (status) {
                 // 对于 403 rate limit 错误，静默处理，不抛出异常

@@ -16,6 +16,12 @@ import importlib
 import urllib.parse
 from datetime import datetime
 
+try:
+    from app.sdk.version import read_project_version
+except ImportError:
+    def read_project_version(default="1.0.0"):
+        return default
+
 # 添加数据库导入
 try:
     from app.sdk.db import RecordDB, CalendarDB
@@ -952,7 +958,7 @@ def extract_episode_number(filename, episode_patterns=None, config_data=None):
     return None
 
 # 全局变量
-VERSION = "2.9.0"
+VERSION = read_project_version()
 CONFIG_PATH = "quark_config.json"
 COOKIE_PATH = "quark_cookie.txt"
 CONFIG_DATA = {}

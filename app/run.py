@@ -51,6 +51,7 @@ from quark_auto_save import extract_episode_number, sort_file_by_name, chinese_t
 
 # 导入豆瓣服务
 from sdk.douban_service import douban_service
+from sdk.version import resolve_app_version
 
 # 导入追剧日历相关模块
 from utils.task_extractor import TaskExtractor
@@ -1014,14 +1015,11 @@ except ImportError:
 
 
 def get_app_ver():
-    BUILD_SHA = os.environ.get("BUILD_SHA", "")
-    BUILD_TAG = os.environ.get("BUILD_TAG", "")
-    if BUILD_TAG[:1] == "v":
-        return BUILD_TAG
-    elif BUILD_SHA:
-        return f"{BUILD_TAG}({BUILD_SHA[:7]})"
-    else:
-        return "dev"
+    return resolve_app_version(
+        build_tag=os.environ.get("BUILD_TAG", ""),
+        build_sha=os.environ.get("BUILD_SHA", ""),
+        app_version=os.environ.get("APP_VERSION", ""),
+    )
 
 
 # 文件路径
