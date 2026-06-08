@@ -109,6 +109,75 @@ class DoubanService:
                 'data': {'items': []}
             }
 
+    def search_subjects(self, keyword: str, content_type: str = "all", limit: int = 20, start: int = 0) -> Dict[str, Any]:
+        """
+        搜索豆瓣影视条目，并转换成影视发现页可直接渲染的数据结构。
+        """
+        keyword = (keyword or "").strip()
+        normalized_type = self._normalize_content_type(content_type)
+        if not keyword:
+            return {
+                'success': False,
+                'message': '请输入搜索关键词',
+                'data': {'items': []}
+            }
+
+        try:
+            limit = max(1, min(int(limit or 20), 50))
+        except (TypeError, ValueError):
+            limit = 20
+
+        try:
+            start = max(0, int(start or 0))
+        except (TypeError, ValueError):
+            start = 0
+
+        params = {
+            'q': keyword,
+            'type': 'movie',
+            'start': start,
+            'count': limit
+        }
+
+        try:
+            url = f"{self.base_url}/search/subjects"
+            session = requests.Session()
+            session.headers.update(self.headers)
+            response = session.get(url, params=params, timeout=20)
+            response.raise_for_status()
+
+            if not response.text.strip():
+                raise ValueError("搜索API返回空响应")
+
+            data = response.json()
+            raw_items = ((data.get('subjects') or {}).get('items') or [])
+            processed_items = []
+
+            for entry in raw_items:
+                target = entry.get('target') if isinstance(entry, dict) else None
+                if not target and isinstance(entry, dict):
+                    target = entry
+                processed_item = self._process_search_target(target, normalized_type)
+                if not processed_item:
+                    continue
+                if self._search_item_matches_type(processed_item, normalized_type):
+                    processed_items.append(processed_item)
+
+            return {
+                'success': True,
+                'message': '搜索成功',
+                'data': {
+                    'items': processed_items[:limit],
+                    'total': len(processed_items)
+                }
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'搜索失败: {str(e)}',
+                'data': {'items': []}
+            }
+
     def _get_movie_ranking(self, main_category: str, sub_category: str, start: int = 0, limit: int = 20) -> Dict[str, Any]:
         """获取电影榜单数据"""
         try:
@@ -387,9 +456,11 @@ class DoubanService:
             # 处理图片URL
             pic_data = item.get('pic', {})
             pic_url = ''
-            if pic_data:
+            if isinstance(pic_data, dict) and pic_data:
                 # 优先使用normal尺寸的图片
                 pic_url = pic_data.get('normal', '') or pic_data.get('large', '')
+            if not pic_url:
+                pic_url = item.get('cover_url', '') or item.get('img', '')
 
             # 处理评分数据
             rating_data = item.get('rating', {})
@@ -425,7 +496,9 @@ class DoubanService:
                     'normal': pic_url
                 },
                 'rating': rating,
-                'card_subtitle': item.get('card_subtitle', '')
+                'card_subtitle': self._normalize_card_subtitle(item.get('year', ''), item.get('card_subtitle', '')),
+                'summary': item.get('abstract', '') or item.get('summary', ''),
+                'content_type': self._infer_content_type(item)
             }
 
             # 确保必要字段存在
@@ -436,6 +509,72 @@ class DoubanService:
 
         except Exception:
             return None
+
+    def _process_search_target(self, target: Optional[Dict[str, Any]], requested_type: str = "all") -> Optional[Dict[str, Any]]:
+        if not isinstance(target, dict):
+            return None
+
+        item = dict(target)
+        if item.get('cover_url') and not item.get('pic'):
+            item['pic'] = {'normal': item.get('cover_url')}
+
+        processed = self._process_item(item)
+        if not processed:
+            return None
+
+        inferred_type = processed.get('content_type') or self._infer_content_type(item)
+        if requested_type in ('anime', 'variety', 'documentary'):
+            processed['content_type'] = requested_type
+        else:
+            processed['content_type'] = inferred_type
+
+        processed['search_source'] = 'douban'
+        processed['summary'] = item.get('abstract', '') or item.get('summary', '') or ''
+        processed['card_subtitle'] = self._normalize_card_subtitle(processed.get('year', ''), item.get('card_subtitle', ''))
+        return processed
+
+    def _normalize_card_subtitle(self, year: Any, subtitle: Any) -> str:
+        year_text = str(year or '').strip()
+        subtitle_text = str(subtitle or '').strip()
+        if not subtitle_text:
+            return year_text
+
+        first_part = subtitle_text.split(' / ', 1)[0].strip()
+        if first_part.isdigit() and len(first_part) == 4:
+            return subtitle_text
+        if year_text and not subtitle_text.startswith(f"{year_text} /"):
+            return f"{year_text} / {subtitle_text}"
+        return subtitle_text
+
+    def _normalize_content_type(self, content_type: Any) -> str:
+        value = str(content_type or 'all').strip().lower()
+        aliases = {
+            'movie': 'movie',
+            'film': 'movie',
+            'tv': 'tv',
+            'drama': 'tv',
+            'show': 'variety',
+            'variety': 'variety',
+            'anime': 'anime',
+            'animation': 'anime',
+            'documentary': 'documentary',
+            'doc': 'documentary',
+            'all': 'all'
+        }
+        return aliases.get(value, 'all')
+
+    def _infer_content_type(self, item: Dict[str, Any]) -> str:
+        raw_url = (item.get('uri') or item.get('url') or '').lower()
+        if '/tv/' in raw_url or 'douban.com/tv/' in raw_url:
+            return 'tv'
+        return 'movie'
+
+    def _search_item_matches_type(self, item: Dict[str, Any], content_type: str) -> bool:
+        if content_type == 'all':
+            return True
+        if content_type in ('anime', 'variety', 'documentary'):
+            return True
+        return item.get('content_type') == content_type
 
     def _get_mock_movie_data(self) -> Dict[str, Any]:
         """获取模拟电影数据"""

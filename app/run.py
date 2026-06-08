@@ -9347,6 +9347,25 @@ def get_tv_list(tv_type, sub_category):
         })
 
 
+@app.route("/api/douban/search")
+def search_douban_subjects():
+    """搜索豆瓣影视条目"""
+    try:
+        keyword = request.args.get('q', '').strip()
+        content_type = request.args.get('type', 'all')
+        limit = int(request.args.get('limit', 20))
+        start = int(request.args.get('start', 0))
+
+        result = douban_service.search_subjects(keyword, content_type, limit, start)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'搜索影视失败: {str(e)}',
+            'data': {'items': []}
+        })
+
+
 @app.route("/api/proxy/douban-image")
 def proxy_douban_image():
     """代理豆瓣图片请求，设置正确的 Referer 头以绕过防盗链限制"""
