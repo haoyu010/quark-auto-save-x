@@ -2256,6 +2256,10 @@ def get_data():
     data["source"].setdefault("cloudsaver", {"server": "", "username": "", "password": "", "token": ""})
     # PanSou 默认字段
     data["source"].setdefault("pansou", {"server": "https://so.252035.xyz"})
+    # 失效链接自动换源默认字段
+    data.setdefault("task_settings", {})
+    data["task_settings"].setdefault("auto_replace_invalid_shareurl", "enabled")
+    data["task_settings"].setdefault("auto_replace_min_score", 85)
 
     # 发送webui信息，但不发送密码原文
     data["webui"] = {

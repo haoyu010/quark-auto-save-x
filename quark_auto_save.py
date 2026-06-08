@@ -1369,6 +1369,13 @@ class Config:
                 }
                 if task.get("media_id"):
                     del task["media_id"]
+
+        task_settings = config_data.setdefault("task_settings", {})
+        task_settings.setdefault("auto_replace_invalid_shareurl", "enabled")
+        task_settings.setdefault("auto_replace_min_score", 85)
+        source_settings = config_data.setdefault("source", {})
+        source_settings.setdefault("pansou", {"server": "https://so.252035.xyz"})
+        source_settings.setdefault("cloudsaver", {"server": "", "username": "", "password": "", "token": ""})
                     
 
 
@@ -2760,9 +2767,59 @@ class Quark:
             print(f"检查文件记录时出错: {e}")
             return False
 
+    def try_auto_replace_invalid_shareurl(self, task, reason=""):
+        """尝试为失效任务自动搜索并替换新的分享链接。"""
+        try:
+            try:
+                from app.sdk.resource_replacer import ResourceAutoReplacer
+            except ImportError:
+                from sdk.resource_replacer import ResourceAutoReplacer
+
+            def _extract_episode(file_name):
+                return extract_episode_number(file_name, config_data=CONFIG_DATA)
+
+            replacer = ResourceAutoReplacer(
+                CONFIG_DATA,
+                self,
+                logger=print,
+                episode_extractor=_extract_episode,
+            )
+            result = replacer.try_replace(task, reason)
+            if result.get("attempted"):
+                if result.get("replaced"):
+                    best = result.get("best") or {}
+                    source = best.get("source") or "搜索来源"
+                    score = best.get("score")
+                    score_text = f"，评分 {score}" if score is not None else ""
+                    message = f"♻️《{task.get('taskname', '')}》失效链接已自动换源（{source}{score_text}）"
+                    print(message)
+                    add_notify(message + "\n")
+                else:
+                    print(f"自动换源未替换《{task.get('taskname', '')}》: {result.get('message')}")
+            return result
+        except Exception as e:
+            print(f"自动换源异常: {e}")
+            return {"attempted": False, "replaced": False, "message": str(e)}
+
+    def retry_save_after_auto_replace(self, task, reason=""):
+        """自动换源成功后重试一次转存，避免递归循环。"""
+        if task.get("_auto_replace_retrying"):
+            return False, None
+        result = self.try_auto_replace_invalid_shareurl(task, reason)
+        if not result.get("replaced"):
+            return False, None
+        task["_auto_replace_retrying"] = True
+        try:
+            return True, self.do_save_task(task)
+        finally:
+            task.pop("_auto_replace_retrying", None)
+
     def do_save_task(self, task):
         # 判断资源失效记录
         if task.get("shareurl_ban"):
+            replaced, retry_tree = self.retry_save_after_auto_replace(task, task.get("shareurl_ban"))
+            if replaced:
+                return retry_tree
             add_notify(f"❗《{task['taskname']}》分享资源已失效: {task['shareurl_ban']}\n")
             return
             
@@ -2775,6 +2832,9 @@ class Quark:
         if not pwd_id:
             task["shareurl_ban"] = f"提取链接参数失败，请检查分享链接是否有效"
             print(f"提取链接参数失败，请检查分享链接是否有效")
+            replaced, retry_tree = self.retry_save_after_auto_replace(task, task["shareurl_ban"])
+            if replaced:
+                return retry_tree
             return
         # 获取分享详情
         is_sharing, stoken = self.get_stoken(pwd_id, passcode)
@@ -2789,6 +2849,9 @@ class Quark:
                 pass
             # 非可恢复错误，按失效处理
             task["shareurl_ban"] = stoken
+            replaced, retry_tree = self.retry_save_after_auto_replace(task, stoken)
+            if replaced:
+                return retry_tree
             add_notify(f"❗《{task['taskname']}》分享详情获取失败: {stoken}\n")
             return
         share_detail = self.get_detail(pwd_id, stoken, pdir_fid, _fetch_share=1)
@@ -2800,6 +2863,9 @@ class Quark:
                 return  # 直接返回，不设置 shareurl_ban
             else:
                 task["shareurl_ban"] = self.format_unrecoverable_error(error_text) if hasattr(self, 'format_unrecoverable_error') else error_text
+                replaced, retry_tree = self.retry_save_after_auto_replace(task, task["shareurl_ban"])
+                if replaced:
+                    return retry_tree
                 add_notify(f"❗《{task['taskname']}》获取分享详情失败: {task['shareurl_ban']}\n")
                 return
         # 获取保存路径fid
@@ -2885,6 +2951,9 @@ class Quark:
         if not share_file_list:
             if subdir_path == "":
                 task["shareurl_ban"] = "分享为空，文件已被分享者删除"
+                replaced, retry_tree = self.retry_save_after_auto_replace(task, task["shareurl_ban"])
+                if replaced:
+                    return retry_tree
                 add_notify(f"❌《{task['taskname']}》: {task['shareurl_ban']}\n")
             return tree
         elif (

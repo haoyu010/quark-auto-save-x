@@ -22,6 +22,21 @@
       "replace": ""
     }
   },
+  "task_settings": {
+    "auto_replace_invalid_shareurl": "enabled",
+    "auto_replace_min_score": 85
+  },
+  "source": {
+    "pansou": {
+      "server": "https://so.252035.xyz"
+    },
+    "cloudsaver": {
+      "server": "",
+      "username": "",
+      "password": "",
+      "token": ""
+    }
+  },
   "tasklist": [
     {
       "taskname": "测试 - 正则命名",

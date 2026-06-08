@@ -867,6 +867,25 @@
                   </select>
                 </div>
               </div>
+              <div class="task-auto-search-item">
+                <div class="input-group">
+                  <div class="input-group-prepend">
+                    <span class="input-group-text">失效链接自动换源</span>
+                  </div>
+                  <select class="form-control" v-model="formData.task_settings.auto_replace_invalid_shareurl" title="启用后，任务运行时若确认分享链接失效，将从已配置搜索来源中验证并选择不降级的替换链接">
+                    <option value="enabled">启用</option>
+                    <option value="disabled">禁用</option>
+                  </select>
+                </div>
+              </div>
+              <div class="task-auto-search-item">
+                <div class="input-group">
+                  <div class="input-group-prepend">
+                    <span class="input-group-text">换源最低质量分</span>
+                  </div>
+                  <input type="number" class="form-control" min="0" max="100" step="1" v-model.number="formData.task_settings.auto_replace_min_score" title="候选链接评分达到该值才会自动替换，建议保持 85 以上以避免质量下降">
+                </div>
+              </div>
             </div>
 
             <div class="form-group">
@@ -3324,7 +3343,12 @@
             tv_naming_rule: "剧名 - S季数E[]",
             tv_ignore_extension: true,
             subtitle_naming_rule: "zh",
-            subtitle_add_language_code: false
+            subtitle_add_language_code: false,
+            auto_search_resources: "enabled",
+            auto_search_resources_on_edit: "enabled",
+            auto_replace_invalid_shareurl: "enabled",
+            auto_replace_min_score: 85,
+            auto_extract_archive: "disabled"
           },
           source: {
             cloudsaver: {
@@ -9338,6 +9362,8 @@
                   subtitle_add_language_code: false,
                   auto_search_resources: "enabled",
                   auto_search_resources_on_edit: "enabled",
+                  auto_replace_invalid_shareurl: "enabled",
+                  auto_replace_min_score: 85,
                   auto_extract_archive: "disabled"
                 };
               }
@@ -9366,6 +9392,13 @@
               // 确保编辑任务时自动搜索资源设置存在
               if (!config_data.task_settings.auto_search_resources_on_edit) {
                 config_data.task_settings.auto_search_resources_on_edit = "enabled";
+              }
+              // 确保失效链接自动换源设置存在
+              if (!config_data.task_settings.auto_replace_invalid_shareurl) {
+                config_data.task_settings.auto_replace_invalid_shareurl = "enabled";
+              }
+              if (config_data.task_settings.auto_replace_min_score === undefined || config_data.task_settings.auto_replace_min_score === null || config_data.task_settings.auto_replace_min_score === "") {
+                config_data.task_settings.auto_replace_min_score = 85;
               }
               // 确保自动解压压缩文件设置存在
               if (!config_data.task_settings.auto_extract_archive) {
