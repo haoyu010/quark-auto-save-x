@@ -1127,7 +1127,27 @@
           </div>
 
           <div v-if="activeTab === 'tasklist'">
-            <div style="height: 20px;"></div>
+            <section class="task-dashboard-hero">
+              <div class="task-dashboard-copy">
+                <span class="task-dashboard-eyebrow">Quark Auto Save X</span>
+                <h1>任务中枢</h1>
+                <p>集中管理追更转存、资源筛选和运行状态。</p>
+              </div>
+              <div class="task-dashboard-metrics">
+                <div class="task-dashboard-metric">
+                  <span class="metric-label">当前任务</span>
+                  <strong>{{ tasklistVisibleCount }}</strong>
+                </div>
+                <div class="task-dashboard-metric">
+                  <span class="metric-label">整体进度</span>
+                  <strong>{{ tasklistOverallProgress !== null ? tasklistOverallProgress + '%' : '--' }}</strong>
+                </div>
+                <div class="task-dashboard-metric">
+                  <span class="metric-label">视图模式</span>
+                  <strong>{{ tasklist.viewMode === 'list' ? '列表' : '海报' }}</strong>
+                </div>
+              </div>
+            </section>
             <div class="row tasklist-filter-row" style="margin-bottom: 8px;">
               <div class="col-xl-4 col-lg-4 col-md-6 mb-2 mb-lg-0">
                 <div class="input-group">
@@ -1262,7 +1282,9 @@
                 <div class="form-group row" style="align-items:center">
                   <div class="col pl-0" data-toggle="collapse" :data-target="'#collapse_'+index" aria-expanded="true" :aria-controls="'collapse_'+index">
                     <div class="btn btn-block text-left">
-                      <i class="bi bi-caret-right-fill"></i> #<span v-html="`${String((task.__originalIndex !== undefined ? task.__originalIndex : index) + 1).padStart(2, '0')} ${task.taskname}`"></span>
+                      <span class="task-row-toggle"><i class="bi bi-caret-right-fill"></i></span>
+                      <span class="task-row-index">#{{ String((task.__originalIndex !== undefined ? task.__originalIndex : index) + 1).padStart(2, '0') }}</span>
+                      <span class="task-row-title" v-html="task.taskname"></span>
                       <template v-for="key in formData.button_display_order">
                         <span v-if="key==='latest_transfer_file' && formData.button_display.latest_transfer_file !== 'disabled' && taskLatestFiles[task.taskname]"
                               class="task-latest-file"
