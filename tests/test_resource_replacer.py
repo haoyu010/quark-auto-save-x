@@ -50,6 +50,7 @@ class ResourceAutoReplacerTest(unittest.TestCase):
         result = replacer.try_replace(task, "失效")
 
         self.assertTrue(result["replaced"])
+        self.assertEqual(result["old_shareurl"], "old")
         self.assertEqual(task["shareurl"], "https://pan.quark.cn/s/good")
         self.assertIsNone(task.get("shareurl_ban"))
 

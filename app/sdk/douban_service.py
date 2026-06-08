@@ -461,6 +461,7 @@ class DoubanService:
                 pic_url = pic_data.get('normal', '') or pic_data.get('large', '')
             if not pic_url:
                 pic_url = item.get('cover_url', '') or item.get('img', '')
+            pic_url = self._normalize_image_url(pic_url)
 
             # 处理评分数据
             rating_data = item.get('rating', {})
@@ -509,6 +510,14 @@ class DoubanService:
 
         except Exception:
             return None
+
+    def _normalize_image_url(self, url: Any) -> str:
+        image_url = str(url or '').strip()
+        if not image_url or 'imageView2' not in image_url:
+            return image_url
+        if 'doubanio.com/' in image_url or 'douban.com/' in image_url:
+            return image_url.split('?', 1)[0]
+        return image_url
 
     def _process_search_target(self, target: Optional[Dict[str, Any]], requested_type: str = "all") -> Optional[Dict[str, Any]]:
         if not isinstance(target, dict):

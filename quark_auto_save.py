@@ -959,6 +959,56 @@ CONFIG_DATA = {}
 LOG_LIST = []
 NOTIFYS = []
 
+def persist_auto_replaced_shareurl(task, replace_result=None):
+    """Merge a replaced runtime task link back into CONFIG_DATA."""
+    if not isinstance(CONFIG_DATA, dict) or not isinstance(task, dict):
+        return False
+    tasklist = CONFIG_DATA.get("tasklist")
+    if not isinstance(tasklist, list):
+        return False
+
+    replace_result = replace_result or {}
+    best = replace_result.get("best") or {}
+    old_shareurl = replace_result.get("old_shareurl") or task.get("_auto_replace_old_shareurl") or ""
+    new_shareurl = task.get("shareurl") or best.get("shareurl") or ""
+    if not new_shareurl:
+        return False
+
+    taskname = task.get("taskname") or ""
+
+    def same_task(candidate):
+        if not isinstance(candidate, dict):
+            return False
+        candidate_name = candidate.get("taskname") or ""
+        if taskname and candidate_name and candidate_name != taskname:
+            return False
+        if old_shareurl and candidate.get("shareurl") == old_shareurl:
+            return True
+        return candidate.get("shareurl") == new_shareurl
+
+    def apply_update(candidate):
+        if not isinstance(candidate, dict):
+            return False
+        if candidate.get("shareurl") == new_shareurl and candidate.get("shareurl_ban") is None:
+            return False
+        candidate["shareurl"] = new_shareurl
+        candidate["shareurl_ban"] = None
+        return True
+
+    raw_index = os.environ.get("ORIGINAL_TASK_INDEX")
+    if raw_index:
+        try:
+            index = int(raw_index) - 1
+        except (TypeError, ValueError):
+            index = -1
+        if 0 <= index < len(tasklist) and same_task(tasklist[index]):
+            return apply_update(tasklist[index])
+
+    matches = [candidate for candidate in tasklist if same_task(candidate)]
+    if len(matches) == 1:
+        return apply_update(matches[0])
+    return False
+
 def is_date_format(number_str):
     """
     判断一个纯数字字符串是否可能是日期格式
@@ -2787,6 +2837,7 @@ class Quark:
             result = replacer.try_replace(task, reason)
             if result.get("attempted"):
                 if result.get("replaced"):
+                    persist_auto_replaced_shareurl(task, result)
                     best = result.get("best") or {}
                     source = best.get("source") or "搜索来源"
                     score = best.get("score")

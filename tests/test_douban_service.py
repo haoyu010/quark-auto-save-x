@@ -77,6 +77,33 @@ class DoubanSearchTest(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertEqual(result["data"]["items"], [])
 
+    def test_search_subjects_strips_thumbnail_query_for_high_quality_poster(self):
+        payload = {
+            "subjects": {
+                "items": [
+                    {
+                        "target": {
+                            "id": "7054120",
+                            "title": "Black Mirror",
+                            "year": "2011",
+                            "uri": "douban://douban.com/tv/7054120",
+                            "cover_url": "https://qnmob3.doubanio.com/view/photo/large/public/p1403875505.jpg?imageView2/0/q/80/w/9999/h/120/format/jpg",
+                        }
+                    }
+                ]
+            }
+        }
+        fake_session = FakeSession(payload)
+
+        with patch("app.sdk.douban_service.requests.Session", return_value=fake_session):
+            result = DoubanService().search_subjects("Black Mirror", content_type="tv", limit=5)
+
+        item = result["data"]["items"][0]
+        self.assertEqual(
+            item["pic"]["normal"],
+            "https://qnmob3.doubanio.com/view/photo/large/public/p1403875505.jpg",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

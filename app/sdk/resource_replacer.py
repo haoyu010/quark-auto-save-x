@@ -101,6 +101,7 @@ class ResourceAutoReplacer:
         result.update({
             "replaced": True,
             "message": f"已替换失效链接：{old_url} -> {best_url}",
+            "old_shareurl": old_url,
             "best": {
                 "shareurl": best_url,
                 "taskname": best["candidate"].get("taskname", ""),
