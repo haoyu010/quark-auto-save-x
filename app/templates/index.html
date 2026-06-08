@@ -552,27 +552,129 @@
                 </span>
               </div>
             </div>
-            <div class="input-group mb-2">
-              <div class="input-group-prepend">
-                <span class="input-group-text">推送通知</span>
+            <div class="notify-hub">
+              <div class="notify-mode-row">
+                <div class="notify-mode-copy">
+                  <span>Notify</span>
+                  <strong>推送策略</strong>
+                </div>
+                <div class="notify-mode-select">
+                  <i class="bi bi-bell-fill"></i>
+                  <select v-model="formData.push_notify_type" class="form-control">
+                    <option value="full">推送完整信息（转存成功、转存失败、资源失效）</option>
+                    <option value="success_only">推送成功信息（转存成功）</option>
+                    <option value="exclude_invalid">排除失效信息（转存成功、转存失败）</option>
+                  </select>
+                </div>
               </div>
-              <select v-model="formData.push_notify_type" class="form-control">
-                <option value="full">推送完整信息（转存成功、转存失败、资源失效）</option>
-                <option value="success_only">推送成功信息（转存成功）</option>
-                <option value="exclude_invalid">排除失效信息（转存成功、转存失败）</option>
-              </select>
-            </div>
-            <div v-for="(value, key, index) in formData.push_config" :key="key" class="input-group mb-2">
-              <div class="input-group-prepend">
-                <span class="input-group-text" v-html="key"></span>
-              </div>
-              <div class="input-group-prepend" v-if="(key == 'DEER_KEY' || key == 'PUSH_KEY')">
-                <a type="button" class="btn btn-warning" target="_blank" href="https://sct.ftqq.com/r/13249" title="Server酱推荐计划"><i class="bi bi-award"></i></a>
-              </div>
-              <input type="text" v-model="formData.push_config[key]" class="form-control">
-              <div class="input-group-append">
-                <button v-if="index === Object.keys(formData.push_config).length - 1" type="button" class="btn btn-outline-primary" @click="addPush()"><i class="bi bi-plus-lg"></i></button>
-                <button v-if="Object.keys(formData.push_config).length > 1" type="button" class="btn btn-outline-danger" @click="removePush(key)"><i class="bi bi-dash-lg"></i></button>
+
+              <section class="notify-panel telegram-notify-panel" v-if="formData.push_config">
+                <div class="notify-panel-main">
+                  <aside class="notify-channel-rail">
+                    <div class="notify-channel-mark">
+                      <i class="bi bi-send-fill"></i>
+                    </div>
+                    <div class="notify-channel-copy">
+                      <div class="notify-channel-title">Telegram</div>
+                      <div class="notify-channel-subtitle">机器人通知</div>
+                    </div>
+                    <span :class="['notify-status-badge', isTelegramEnabled() ? 'is-on' : 'is-off']">
+                      <i :class="['bi', isTelegramEnabled() ? 'bi-check2-circle' : 'bi-slash-circle']"></i>
+                      {{ isTelegramEnabled() ? '已启用' : '未启用' }}
+                    </span>
+                  </aside>
+
+                  <div class="notify-config-area">
+                    <div class="notify-config-head">
+                      <div>
+                        <span class="notify-mini-label">Telegram Bot</span>
+                        <h3>消息通道</h3>
+                      </div>
+                      <label class="notify-switch" title="启用 Telegram 通知">
+                        <input type="checkbox" :checked="isTelegramEnabled()" @change="setTelegramEnabled($event.target.checked)">
+                        <span></span>
+                      </label>
+                    </div>
+
+                    <div class="telegram-form-grid">
+                      <label class="notify-field notify-field-token">
+                        <span>Bot Token</span>
+                        <div class="notify-secret-input">
+                          <input :type="showTelegramToken ? 'text' : 'password'" v-model="formData.push_config.TG_BOT_TOKEN" placeholder="123456:ABC-DEF">
+                          <button type="button" @click="toggleTelegramToken" :title="showTelegramToken ? '隐藏' : '显示'">
+                            <i :class="['bi', showTelegramToken ? 'bi-eye' : 'bi-eye-slash']"></i>
+                          </button>
+                        </div>
+                      </label>
+                      <label class="notify-field">
+                        <span>Chat ID</span>
+                        <input type="text" v-model="formData.push_config.TG_USER_ID" placeholder="123456789">
+                      </label>
+                      <label class="notify-field">
+                        <span>API Host</span>
+                        <input type="text" v-model="formData.push_config.TG_API_HOST" placeholder="https://api.telegram.org">
+                      </label>
+                    </div>
+
+                    <div class="notify-actions">
+                      <button type="button" class="notify-primary-btn" :disabled="telegramTesting || !isTelegramEnabled()" @click="testTelegramNotify">
+                        <i v-if="telegramTesting" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></i>
+                        <i v-else class="bi bi-send-fill"></i>
+                        <span>{{ telegramTesting ? '发送中' : '发送测试' }}</span>
+                      </button>
+                      <button type="button" class="notify-secondary-btn" data-toggle="collapse" data-target="#telegramProxySettings" aria-expanded="false" aria-controls="telegramProxySettings">
+                        <i class="bi bi-sliders"></i>
+                        <span>代理</span>
+                      </button>
+                      <button type="button" class="notify-secondary-btn" data-toggle="collapse" data-target="#advancedPushSettings" aria-expanded="false" aria-controls="advancedPushSettings">
+                        <i class="bi bi-braces"></i>
+                        <span>变量</span>
+                      </button>
+                    </div>
+
+                    <div class="collapse telegram-proxy-collapse" id="telegramProxySettings">
+                      <div class="telegram-form-grid telegram-proxy-grid">
+                        <label class="notify-field">
+                          <span>Proxy Host</span>
+                          <input type="text" v-model="formData.push_config.TG_PROXY_HOST" placeholder="127.0.0.1">
+                        </label>
+                        <label class="notify-field">
+                          <span>Proxy Port</span>
+                          <input type="text" v-model="formData.push_config.TG_PROXY_PORT" placeholder="7890">
+                        </label>
+                        <label class="notify-field">
+                          <span>Proxy Auth</span>
+                          <div class="notify-secret-input">
+                            <input :type="showTelegramProxyAuth ? 'text' : 'password'" v-model="formData.push_config.TG_PROXY_AUTH" placeholder="user:password">
+                            <button type="button" @click="toggleTelegramProxyAuth" :title="showTelegramProxyAuth ? '隐藏' : '显示'">
+                              <i :class="['bi', showTelegramProxyAuth ? 'bi-eye' : 'bi-eye-slash']"></i>
+                            </button>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="collapse advanced-push-list" id="advancedPushSettings">
+                <div v-for="(key, index) in getAdvancedPushKeys()" :key="key" class="input-group mb-2">
+                  <div class="input-group-prepend">
+                    <span class="input-group-text" v-html="key"></span>
+                  </div>
+                  <div class="input-group-prepend" v-if="(key == 'DEER_KEY' || key == 'PUSH_KEY')">
+                    <a type="button" class="btn btn-warning" target="_blank" href="https://sct.ftqq.com/r/13249" title="Server酱推荐计划"><i class="bi bi-award"></i></a>
+                  </div>
+                  <input type="text" v-model="formData.push_config[key]" class="form-control">
+                  <div class="input-group-append">
+                    <button v-if="index === getAdvancedPushKeys().length - 1" type="button" class="btn btn-outline-primary" @click="addPush()"><i class="bi bi-plus-lg"></i></button>
+                    <button type="button" class="btn btn-outline-danger" @click="removePush(key)"><i class="bi bi-dash-lg"></i></button>
+                  </div>
+                </div>
+                <button v-if="getAdvancedPushKeys().length === 0" type="button" class="btn btn-outline-primary advanced-push-add" @click="addPush()">
+                  <i class="bi bi-plus-lg"></i>
+                  <span>添加高级变量</span>
+                </button>
               </div>
             </div>
 
@@ -3413,6 +3515,18 @@
         sidebarCollapsed: false,
         showCloudSaverPassword: false,
         showWebuiPassword: false,
+        showTelegramToken: false,
+        showTelegramProxyAuth: false,
+        telegramTesting: false,
+        telegramCorePushKeys: [
+          'TG_ENABLED',
+          'TG_BOT_TOKEN',
+          'TG_USER_ID',
+          'TG_API_HOST',
+          'TG_PROXY_HOST',
+          'TG_PROXY_PORT',
+          'TG_PROXY_AUTH'
+        ],
         pageWidthMode: 'medium', // 页面宽度模式：narrow, medium, wide
         pluginDisplayAliases: {
           alist: 'AList',
@@ -3425,7 +3539,15 @@
         configHasLoaded: false,
         formData: {
           cookie: [],
-          push_config: {},
+          push_config: {
+            TG_ENABLED: 'disabled',
+            TG_BOT_TOKEN: '',
+            TG_USER_ID: '',
+            TG_API_HOST: '',
+            TG_PROXY_HOST: '',
+            TG_PROXY_PORT: '',
+            TG_PROXY_AUTH: ''
+          },
           push_notify_type: 'full',
           media_servers: {},
           tasklist: [],
@@ -9368,6 +9490,7 @@
           axios.get('/data')
             .then(response => {
               config_data = response.data.data
+              this.ensureTelegramPushConfig(config_data);
               // cookie兼容
               if (typeof config_data.cookie === 'string')
                 config_data.cookie = [config_data.cookie];
@@ -9667,6 +9790,7 @@
           }
         },
         saveConfig() {
+          this.ensureTelegramPushConfig();
           // 保存前处理每个任务的命名模式
           if (this.formData.tasklist && this.formData.tasklist.length > 0) {
             this.formData.tasklist.forEach(task => {
@@ -9739,6 +9863,68 @@
           if (Object.keys(this.formData.push_config).length <= 1) return;
           if (confirm("确定要删除吗？"))
             this.$delete(this.formData.push_config, key);
+        },
+        ensureTelegramPushConfig(target) {
+          const configTarget = target || this.formData;
+          if (!configTarget.push_config || typeof configTarget.push_config !== 'object') {
+            this.$set(configTarget, 'push_config', {});
+          }
+          const defaults = {
+            TG_ENABLED: 'disabled',
+            TG_BOT_TOKEN: '',
+            TG_USER_ID: '',
+            TG_API_HOST: '',
+            TG_PROXY_HOST: '',
+            TG_PROXY_PORT: '',
+            TG_PROXY_AUTH: ''
+          };
+          Object.keys(defaults).forEach(key => {
+            if (configTarget.push_config[key] === undefined || configTarget.push_config[key] === null) {
+              this.$set(configTarget.push_config, key, defaults[key]);
+            }
+          });
+        },
+        isTelegramEnabled() {
+          const push = (this.formData && this.formData.push_config) || {};
+          const value = push.TG_ENABLED;
+          if (value === true) return true;
+          return ['1', 'true', 'yes', 'enabled', 'on'].includes(String(value || '').trim().toLowerCase());
+        },
+        setTelegramEnabled(enabled) {
+          this.ensureTelegramPushConfig();
+          this.$set(this.formData.push_config, 'TG_ENABLED', enabled ? 'enabled' : 'disabled');
+        },
+        toggleTelegramToken() {
+          this.showTelegramToken = !this.showTelegramToken;
+        },
+        toggleTelegramProxyAuth() {
+          this.showTelegramProxyAuth = !this.showTelegramProxyAuth;
+        },
+        getAdvancedPushKeys() {
+          const push = (this.formData && this.formData.push_config) || {};
+          return Object.keys(push).filter(key => !this.telegramCorePushKeys.includes(key));
+        },
+        testTelegramNotify() {
+          this.ensureTelegramPushConfig();
+          if (!this.isTelegramEnabled()) {
+            this.showToast('请先启用 Telegram 通知');
+            return;
+          }
+          if (!this.formData.push_config.TG_BOT_TOKEN || !this.formData.push_config.TG_USER_ID) {
+            this.showToast('请填写 Bot Token 和 Chat ID');
+            return;
+          }
+          this.telegramTesting = true;
+          axios.post('/api/notify/telegram/test', { push_config: this.formData.push_config })
+            .then(response => {
+              this.showToast(response.data.message || (response.data.success ? '测试通知已发送' : '测试通知失败'));
+            })
+            .catch(error => {
+              this.showToast('测试通知失败: ' + (error.response?.data?.message || error.message || '未知错误'));
+            })
+            .finally(() => {
+              this.telegramTesting = false;
+            });
         },
         addTask() {
           if (!this.formData.tasklist) 

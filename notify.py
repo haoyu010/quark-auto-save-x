@@ -574,49 +574,79 @@ def wecom_bot(title: str, content: str) -> None:
         print("企业微信机器人推送失败！")
 
 
-def telegram_bot(title: str, content: str) -> None:
-    """
-    使用 telegram 机器人 推送消息。
-    """
-    if not push_config.get("TG_BOT_TOKEN") or not push_config.get("TG_USER_ID"):
-        print("tg 服务的 bot_token 或者 user_id 未设置!!\n取消推送")
-        return
-    print("tg 服务启动")
+def telegram_config_enabled(config: dict) -> bool:
+    if "TG_ENABLED" not in config:
+        return True
+    value = config.get("TG_ENABLED")
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "enabled", "on"}
 
-    if push_config.get("TG_API_HOST"):
-        url = f"{push_config.get('TG_API_HOST')}/bot{push_config.get('TG_BOT_TOKEN')}/sendMessage"
+
+def send_telegram_message(title: str, content: str, config: dict = None):
+    """
+    发送 Telegram 机器人消息，返回 (success, message) 供页面测试接口复用。
+    """
+    cfg = push_config.copy()
+    if config:
+        cfg.update(config)
+
+    if not telegram_config_enabled(cfg):
+        return False, "tg 服务未启用"
+    if not cfg.get("TG_BOT_TOKEN") or not cfg.get("TG_USER_ID"):
+        return False, "tg 服务的 bot_token 或者 user_id 未设置"
+
+    api_host = str(cfg.get("TG_API_HOST") or "").strip().rstrip("/")
+    if api_host:
+        url = f"{api_host}/bot{cfg.get('TG_BOT_TOKEN')}/sendMessage"
     else:
-        url = (
-            f"https://api.telegram.org/bot{push_config.get('TG_BOT_TOKEN')}/sendMessage"
-        )
+        url = f"https://api.telegram.org/bot{cfg.get('TG_BOT_TOKEN')}/sendMessage"
+
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     payload = {
-        "chat_id": str(push_config.get("TG_USER_ID")),
+        "chat_id": str(cfg.get("TG_USER_ID")),
         "text": f"{title}\n\n{content}",
         "disable_web_page_preview": "true",
     }
     proxies = None
-    if push_config.get("TG_PROXY_HOST") and push_config.get("TG_PROXY_PORT"):
-        if push_config.get("TG_PROXY_AUTH") is not None and "@" not in push_config.get(
-            "TG_PROXY_HOST"
-        ):
-            push_config["TG_PROXY_HOST"] = (
-                push_config.get("TG_PROXY_AUTH")
-                + "@"
-                + push_config.get("TG_PROXY_HOST")
-            )
-        proxyStr = "http://{}:{}".format(
-            push_config.get("TG_PROXY_HOST"), push_config.get("TG_PROXY_PORT")
-        )
-        proxies = {"http": proxyStr, "https": proxyStr}
-    response = requests.post(
-        url=url, headers=headers, params=payload, proxies=proxies
-    ).json()
+    if cfg.get("TG_PROXY_HOST") and cfg.get("TG_PROXY_PORT"):
+        proxy_host = str(cfg.get("TG_PROXY_HOST"))
+        proxy_auth = str(cfg.get("TG_PROXY_AUTH") or "")
+        if proxy_auth and "@" not in proxy_host:
+            proxy_host = proxy_auth + "@" + proxy_host
+        proxy_str = "http://{}:{}".format(proxy_host, cfg.get("TG_PROXY_PORT"))
+        proxies = {"http": proxy_str, "https": proxy_str}
 
-    if response["ok"]:
+    try:
+        response = requests.post(
+            url=url,
+            headers=headers,
+            params=payload,
+            proxies=proxies,
+            timeout=15,
+        ).json()
+    except Exception as exc:
+        return False, f"tg 推送请求失败: {exc}"
+
+    if response.get("ok"):
+        return True, "tg 推送成功"
+    description = response.get("description") or response
+    return False, f"tg 推送失败: {description}"
+
+
+def telegram_bot(title: str, content: str) -> None:
+    """
+    使用 telegram 机器人 推送消息。
+    """
+    ok, message = send_telegram_message(title, content)
+    if ok:
+        print("tg 服务启动")
         print("tg 推送成功！")
+        return
+    if "未设置" in message or "未启用" in message:
+        print(f"{message}!!\n取消推送")
     else:
-        print("tg 推送失败！")
+        print(message)
 
 
 def aibotk(title: str, content: str) -> None:
@@ -969,7 +999,11 @@ def add_notify_function():
         notify_function.append(wecom_app)
     if push_config.get("QYWX_KEY"):
         notify_function.append(wecom_bot)
-    if push_config.get("TG_BOT_TOKEN") and push_config.get("TG_USER_ID"):
+    if (
+        push_config.get("TG_BOT_TOKEN")
+        and push_config.get("TG_USER_ID")
+        and telegram_config_enabled(push_config)
+    ):
         notify_function.append(telegram_bot)
     if (
         push_config.get("AIBOTK_KEY")

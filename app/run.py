@@ -2242,6 +2242,7 @@ def get_data():
     # 初始化推送通知类型配置（如果不存在）
     if "push_notify_type" not in data:
         data["push_notify_type"] = "full"
+    ensure_push_config_defaults(data)
 
     # 初始化TMDB配置（如果不存在）
     if "tmdb_api_key" not in data:
@@ -2352,6 +2353,50 @@ def format_array_config_for_display(value):
     if isinstance(value, list):
         return ', '.join(value)
     return value
+
+
+TELEGRAM_PUSH_DEFAULTS = {
+    "TG_ENABLED": "disabled",
+    "TG_BOT_TOKEN": "",
+    "TG_USER_ID": "",
+    "TG_API_HOST": "",
+    "TG_PROXY_HOST": "",
+    "TG_PROXY_PORT": "",
+    "TG_PROXY_AUTH": "",
+}
+
+
+def ensure_push_config_defaults(data):
+    if not isinstance(data, dict):
+        return {}
+    push_config = data.get("push_config")
+    if not isinstance(push_config, dict):
+        push_config = {}
+        data["push_config"] = push_config
+    for key, value in TELEGRAM_PUSH_DEFAULTS.items():
+        push_config.setdefault(key, value)
+    return push_config
+
+
+@app.route("/api/notify/telegram/test", methods=["POST"])
+def test_telegram_notify():
+    if not is_login():
+        return jsonify({"success": False, "message": "未登录"})
+    payload = request.get_json(silent=True) or {}
+    push_config = payload.get("push_config")
+    if not isinstance(push_config, dict):
+        push_config = config_data.get("push_config", {}) if isinstance(config_data, dict) else {}
+    try:
+        import notify
+
+        ok, message = notify.send_telegram_message(
+            "【夸克自动转存】",
+            "Telegram 测试通知已送达。",
+            push_config,
+        )
+        return jsonify({"success": ok, "message": message})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Telegram 测试失败: {str(e)}"})
 
 # 更新数据
 @app.route("/update", methods=["POST"])
@@ -4568,6 +4613,7 @@ def init():
     # 初始化推送通知类型配置（如果不存在）
     if "push_notify_type" not in config_data:
         config_data["push_notify_type"] = "full"
+    ensure_push_config_defaults(config_data)
 
     # 同步更新任务的插件配置
     sync_task_plugins_config()
