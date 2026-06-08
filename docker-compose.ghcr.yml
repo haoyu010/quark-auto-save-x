@@ -1,0 +1,13 @@
+services:
+  quark-auto-save-x:
+    image: ghcr.io/haoyu010/quark-auto-save-x:x
+    container_name: quark-auto-save-x
+    ports:
+      - "5005:5005"
+    volumes:
+      - /vol1/1000/docker/quark-auto-save-x/config:/app/config
+      - /vol1/1000/docker/quark-auto-save-x/media:/media
+    environment:
+      - TZ=Asia/Shanghai
+      - PORT=5005
+    restart: unless-stopped
