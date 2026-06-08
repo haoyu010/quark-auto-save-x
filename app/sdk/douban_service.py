@@ -6,6 +6,7 @@
 
 import requests
 from typing import Dict, Optional, Any
+from urllib.parse import urlsplit, urlunsplit
 
 
 class DoubanService:
@@ -513,9 +514,21 @@ class DoubanService:
 
     def _normalize_image_url(self, url: Any) -> str:
         image_url = str(url or '').strip()
-        if not image_url or 'imageView2' not in image_url:
+        if not image_url:
             return image_url
+
         if 'doubanio.com/' in image_url or 'douban.com/' in image_url:
+            parsed = urlsplit(image_url)
+            if parsed.netloc.startswith('qnmob') and '/view/photo/' in parsed.path:
+                return urlunsplit((
+                    parsed.scheme,
+                    parsed.netloc,
+                    parsed.path,
+                    'imageView2/0/q/95/format/jpg',
+                    ''
+                ))
+            if 'imageView2' not in image_url:
+                return image_url
             return image_url.split('?', 1)[0]
         return image_url
 

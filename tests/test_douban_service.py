@@ -64,7 +64,10 @@ class DoubanSearchTest(unittest.TestCase):
         self.assertEqual(item["content_type"], "tv")
         self.assertEqual(item["search_source"], "douban")
         self.assertEqual(item["url"], "https://movie.douban.com/subject/7054120/")
-        self.assertEqual(item["pic"]["normal"], "https://qnmob3.doubanio.com/view/photo/large/public/p1403875505.jpg")
+        self.assertEqual(
+            item["pic"]["normal"],
+            "https://qnmob3.doubanio.com/view/photo/large/public/p1403875505.jpg?imageView2/0/q/95/format/jpg",
+        )
         self.assertEqual(
             item["card_subtitle"],
             "2011 / 英国 / 剧情 科幻 惊悚 / 奥图·巴瑟赫斯特 / 罗里·金尼尔",
@@ -77,7 +80,7 @@ class DoubanSearchTest(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertEqual(result["data"]["items"], [])
 
-    def test_search_subjects_strips_thumbnail_query_for_high_quality_poster(self):
+    def test_search_subjects_upgrades_mobile_thumbnail_query_for_high_quality_poster(self):
         payload = {
             "subjects": {
                 "items": [
@@ -101,7 +104,7 @@ class DoubanSearchTest(unittest.TestCase):
         item = result["data"]["items"][0]
         self.assertEqual(
             item["pic"]["normal"],
-            "https://qnmob3.doubanio.com/view/photo/large/public/p1403875505.jpg",
+            "https://qnmob3.doubanio.com/view/photo/large/public/p1403875505.jpg?imageView2/0/q/95/format/jpg",
         )
 
 
