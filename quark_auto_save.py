@@ -965,6 +965,132 @@ CONFIG_DATA = {}
 LOG_LIST = []
 NOTIFYS = []
 
+def _normalize_task_savepath(task):
+    raw_path = ""
+    if isinstance(task, dict):
+        raw_path = task.get("savepath") or ""
+    path = str(raw_path).replace("\\", "/").strip()
+    return re.sub(r"/{2,}", "/", f"/{path.lstrip('/')}")
+
+def _savepath_variants(savepath):
+    variants = []
+    for value in (savepath, str(savepath).lstrip("/")):
+        if value and value not in variants:
+            variants.append(value)
+    return variants
+
+def _file_update_timestamp(file_info):
+    if not isinstance(file_info, dict):
+        return 0
+    for key in ("last_update_at", "updated_at", "created_at"):
+        try:
+            value = int(file_info.get(key) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return value
+    return 0
+
+def _episode_from_file_info(file_info, config_data=None):
+    if not isinstance(file_info, dict):
+        return None
+    for key in ("renamed_to", "file_name", "original_name"):
+        file_name = file_info.get(key)
+        if not file_name:
+            continue
+        episode = extract_episode_number(str(file_name), config_data=config_data or CONFIG_DATA)
+        if episode is not None:
+            return episode
+    return None
+
+def get_saved_episode_floor(saved_files=None, transfer_records=None, config_data=None):
+    episodes = []
+    for item in saved_files or []:
+        if not isinstance(item, dict) or item.get("dir"):
+            continue
+        episode = _episode_from_file_info(item, config_data=config_data)
+        if episode is not None:
+            episodes.append(episode)
+
+    for record in transfer_records or []:
+        episode = _episode_from_file_info(record, config_data=config_data)
+        if episode is not None:
+            episodes.append(episode)
+
+    return max(episodes) if episodes else None
+
+def select_replacement_startfid_by_saved_progress(replacement_files, saved_episode_floor, config_data=None):
+    selection = {
+        "startfid": "",
+        "file_name": "",
+        "episode": None,
+        "saved_episode_floor": saved_episode_floor,
+    }
+    try:
+        floor = int(saved_episode_floor)
+    except (TypeError, ValueError):
+        return selection
+
+    candidates = []
+    for item in replacement_files or []:
+        if not isinstance(item, dict) or item.get("dir") or not item.get("fid"):
+            continue
+        episode = _episode_from_file_info(item, config_data=config_data)
+        if episode is None or episode <= floor:
+            continue
+        candidates.append((item, episode))
+
+    if not candidates:
+        return selection
+
+    if any(_file_update_timestamp(item) for item, _ in candidates):
+        selected_file, selected_episode = min(
+            candidates,
+            key=lambda pair: (
+                _file_update_timestamp(pair[0]) or float("inf"),
+                pair[1],
+                str(pair[0].get("file_name", "")),
+            ),
+        )
+    else:
+        ordered = sorted(
+            [item for item, _ in candidates],
+            key=sort_file_by_name,
+            reverse=True,
+        )
+        selected_file = ordered[-1]
+        selected_episode = _episode_from_file_info(selected_file, config_data=config_data)
+
+    selection.update({
+        "startfid": selected_file.get("fid", ""),
+        "file_name": selected_file.get("file_name", ""),
+        "episode": selected_episode,
+    })
+    return selection
+
+def filter_share_files_by_saved_episode_floor(share_file_list, saved_episode_floor, config_data=None):
+    try:
+        floor = int(saved_episode_floor)
+    except (TypeError, ValueError):
+        return share_file_list
+
+    filtered = []
+    for item in share_file_list or []:
+        if not isinstance(item, dict) or item.get("dir"):
+            filtered.append(item)
+            continue
+        episode = _episode_from_file_info(item, config_data=config_data)
+        if episode is None or episode > floor:
+            filtered.append(item)
+    return filtered
+
+def get_effective_startfid(task):
+    if isinstance(task, dict) and task.get("_auto_replace_ignore_startfid_once"):
+        return ""
+    if isinstance(task, dict):
+        return task.get("startfid", "")
+    return ""
+
 def persist_auto_replaced_shareurl(task, replace_result=None):
     """Merge a replaced runtime task link back into CONFIG_DATA."""
     if not isinstance(CONFIG_DATA, dict) or not isinstance(task, dict):
@@ -979,6 +1105,8 @@ def persist_auto_replaced_shareurl(task, replace_result=None):
     new_shareurl = task.get("shareurl") or best.get("shareurl") or ""
     if not new_shareurl:
         return False
+    startfid_update = replace_result.get("startfid_update") or {}
+    new_startfid = startfid_update.get("startfid") or ""
 
     taskname = task.get("taskname") or ""
 
@@ -995,11 +1123,17 @@ def persist_auto_replaced_shareurl(task, replace_result=None):
     def apply_update(candidate):
         if not isinstance(candidate, dict):
             return False
-        if candidate.get("shareurl") == new_shareurl and candidate.get("shareurl_ban") is None:
-            return False
-        candidate["shareurl"] = new_shareurl
-        candidate["shareurl_ban"] = None
-        return True
+        changed = False
+        if candidate.get("shareurl") != new_shareurl:
+            candidate["shareurl"] = new_shareurl
+            changed = True
+        if candidate.get("shareurl_ban") is not None:
+            candidate["shareurl_ban"] = None
+            changed = True
+        if new_startfid and candidate.get("startfid") != new_startfid:
+            candidate["startfid"] = new_startfid
+            changed = True
+        return changed
 
     raw_index = os.environ.get("ORIGINAL_TASK_INDEX")
     if raw_index:
@@ -2823,6 +2957,96 @@ class Quark:
             print(f"检查文件记录时出错: {e}")
             return False
 
+    def get_transfer_records_for_task(self, task):
+        """Load local transfer records that can describe saved episode progress."""
+        db = None
+        try:
+            db = RecordDB()
+            if not getattr(db, "conn", None):
+                return []
+
+            where = []
+            params = []
+            taskname = task.get("taskname") if isinstance(task, dict) else ""
+            if taskname:
+                where.append("task_name = ?")
+                params.append(taskname)
+
+            savepath = _normalize_task_savepath(task)
+            variants = _savepath_variants(savepath)
+            if variants:
+                placeholders = ",".join(["?" for _ in variants])
+                where.append(f"save_path IN ({placeholders})")
+                params.extend(variants)
+
+            where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+            cursor = db.conn.cursor()
+            cursor.execute(
+                "SELECT original_name, renamed_to, modify_date, file_id, save_path "
+                f"FROM transfer_records {where_sql}",
+                params,
+            )
+            columns = [column[0] for column in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"auto replace read transfer records failed: {e}")
+            return []
+        finally:
+            if db:
+                db.close()
+
+    def get_saved_episode_floor_for_task(self, task):
+        """Infer the highest saved episode from target directory and local records."""
+        saved_files = []
+        try:
+            savepath = _normalize_task_savepath(task)
+            path_keys = _savepath_variants(savepath)
+            target_fid = ""
+            for key in path_keys:
+                target_fid = getattr(self, "savepath_fid", {}).get(key)
+                if target_fid:
+                    break
+            if not target_fid and savepath:
+                fids = self.get_fids([savepath])
+                if fids:
+                    target_fid = fids[0].get("fid", "")
+                    if target_fid:
+                        self.savepath_fid[savepath] = target_fid
+            if target_fid:
+                listed = self.ls_dir(target_fid)
+                if isinstance(listed, list):
+                    saved_files = listed
+        except Exception as e:
+            print(f"auto replace read target directory failed: {e}")
+
+        records = self.get_transfer_records_for_task(task)
+        return get_saved_episode_floor(saved_files, records, config_data=CONFIG_DATA)
+
+    def prepare_auto_replace_startfid(self, task, replace_result):
+        """Prepare a new-link startfid and one-run episode floor guard."""
+        best = (replace_result or {}).get("best") or {}
+        replacement_files = best.get("files") or []
+        if not replacement_files:
+            return None
+
+        saved_floor = self.get_saved_episode_floor_for_task(task)
+        if saved_floor is None:
+            return None
+
+        task["_auto_replace_saved_episode_floor"] = saved_floor
+        task["_auto_replace_ignore_startfid_once"] = True
+        selection = select_replacement_startfid_by_saved_progress(
+            replacement_files,
+            saved_floor,
+            config_data=CONFIG_DATA,
+        )
+        if not selection.get("startfid"):
+            return None
+
+        task["startfid"] = selection["startfid"]
+        replace_result["startfid_update"] = selection
+        return selection
+
     def try_auto_replace_invalid_shareurl(self, task, reason=""):
         """尝试为失效任务自动搜索并替换新的分享链接。"""
         try:
@@ -2843,6 +3067,7 @@ class Quark:
             result = replacer.try_replace(task, reason)
             if result.get("attempted"):
                 if result.get("replaced"):
+                    startfid_selection = self.prepare_auto_replace_startfid(task, result)
                     persist_auto_replaced_shareurl(task, result)
                     best = result.get("best") or {}
                     source = best.get("source") or "搜索来源"
@@ -2851,6 +3076,11 @@ class Quark:
                     message = f"♻️《{task.get('taskname', '')}》失效链接已自动换源（{source}{score_text}）"
                     print(message)
                     add_notify(message + "\n")
+                    if startfid_selection:
+                        print(
+                            f"auto replace adjusted startfid: "
+                            f"{startfid_selection.get('file_name')} -> {startfid_selection.get('startfid')}"
+                        )
                 else:
                     print(f"自动换源未替换《{task.get('taskname', '')}》: {result.get('message')}")
             return result
@@ -2870,6 +3100,8 @@ class Quark:
             return True, self.do_save_task(task)
         finally:
             task.pop("_auto_replace_retrying", None)
+            task.pop("_auto_replace_saved_episode_floor", None)
+            task.pop("_auto_replace_ignore_startfid_once", None)
 
     def do_save_task(self, task):
         # 判断资源失效记录
@@ -3090,6 +3322,19 @@ class Quark:
                 print(f"📑 应用过滤词: {task['filterwords']}，剩余 {remaining_count} 个项目")
             print()
 
+        auto_replace_floor = task.get("_auto_replace_saved_episode_floor")
+        if auto_replace_floor is not None:
+            before_count = len([f for f in share_file_list if isinstance(f, dict) and not f.get("dir")])
+            share_file_list = filter_share_files_by_saved_episode_floor(
+                share_file_list,
+                auto_replace_floor,
+                config_data=CONFIG_DATA,
+            )
+            after_count = len([f for f in share_file_list if isinstance(f, dict) and not f.get("dir")])
+            skipped_count = before_count - after_count
+            if skipped_count > 0:
+                print(f"auto replace skipped {skipped_count} saved episode files (<= E{int(auto_replace_floor):02d})")
+
         # 获取目标目录文件列表
         savepath = re.sub(r"/{2,}", "/", f"/{task['savepath']}{subdir_path}")
         if not self.savepath_fid.get(savepath):
@@ -3170,7 +3415,7 @@ class Quark:
             # 预先过滤掉已经存在的文件（按大小和扩展名比对）
             # 只保留文件，不保留文件夹
             filtered_share_files = []
-            start_fid = task.get("startfid", "")
+            start_fid = get_effective_startfid(task)
             start_file_found = False
 
 
@@ -3405,7 +3650,7 @@ class Quark:
 
             # 预先过滤分享文件列表，去除已存在的文件
             filtered_share_files = []
-            start_fid = task.get("startfid", "")
+            start_fid = get_effective_startfid(task)
             start_file_found = False
 
             for share_file in share_file_list:
@@ -3558,7 +3803,7 @@ class Quark:
                     })
 
             # 应用起始文件过滤逻辑
-            start_fid = task.get("startfid", "")
+            start_fid = get_effective_startfid(task)
             if start_fid:
                 # 找到起始文件的索引
                 start_index = -1
@@ -4449,7 +4694,7 @@ class Quark:
 
                     # 预先过滤分享文件列表，去除已存在的文件
                     filtered_share_files = []
-                    start_fid = task.get("startfid", "")
+                    start_fid = get_effective_startfid(task)
                     start_file_found = False
 
                     for share_file in share_file_list:

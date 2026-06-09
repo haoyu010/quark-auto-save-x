@@ -38,7 +38,7 @@ class ResourceAutoReplacerTest(unittest.TestCase):
 
     def test_replaces_with_verified_no_downgrade_candidate(self):
         account = FakeAccount({
-            "good": [{"file_name": "Show.S01E01.2160p.mkv", "size": 4000, "dir": False}],
+            "good": [{"file_name": "Show.S01E01.2160p.mkv", "fid": "fid-good-01", "size": 4000, "dir": False}],
         })
         replacer = ResourceAutoReplacer(
             {"auto_replace_invalid_shareurl": {"enabled": True, "min_score": 85}},
@@ -53,6 +53,7 @@ class ResourceAutoReplacerTest(unittest.TestCase):
         self.assertEqual(result["old_shareurl"], "old")
         self.assertEqual(task["shareurl"], "https://pan.quark.cn/s/good")
         self.assertIsNone(task.get("shareurl_ban"))
+        self.assertEqual(result["best"]["files"][0]["fid"], "fid-good-01")
 
     def test_filters_candidates_with_task_filterwords(self):
         account = FakeAccount({

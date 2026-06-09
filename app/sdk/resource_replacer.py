@@ -108,6 +108,7 @@ class ResourceAutoReplacer:
                 "source": best["candidate"].get("source", ""),
                 "score": best["score"],
                 "reason": best["reason"],
+                "files": best["snapshot"].get("files", []),
             },
         })
         return result
