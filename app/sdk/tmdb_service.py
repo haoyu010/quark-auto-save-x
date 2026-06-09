@@ -16,6 +16,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 class TMDBService:
+    IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
+
     def __init__(self, api_key: str = None, poster_language: str = "zh-CN"):
         self.api_key = api_key
         # 首选改为 api.tmdb.org，备选为 api.themoviedb.org
@@ -37,6 +39,18 @@ class TMDBService:
     def is_configured(self) -> bool:
         """检查TMDB API是否已配置"""
         return bool(self.api_key and self.api_key.strip())
+
+    def build_image_url(self, poster_path: str, size: str = "w500") -> str:
+        """Build a public TMDB image URL from a poster_path."""
+        poster_path = str(poster_path or "").strip()
+        if not poster_path:
+            return ""
+        if poster_path.startswith("http://") or poster_path.startswith("https://"):
+            return poster_path
+        if not poster_path.startswith("/"):
+            poster_path = f"/{poster_path}"
+        safe_size = str(size or "w500").strip() or "w500"
+        return f"{self.IMAGE_BASE_URL}/{safe_size}{poster_path}"
     
     def reset_to_primary_url(self):
         """重置到主API地址"""
@@ -125,6 +139,18 @@ class TMDBService:
         result = self._make_request('/search/tv', params)
         if result and result.get('results'):
             # 返回第一个匹配结果
+            return result['results'][0]
+        return None
+
+    def search_movie(self, query: str, year: str = None) -> Optional[Dict]:
+        """Search a movie and return the first TMDB match."""
+        params = {'query': query}
+        if year:
+            params['year'] = year
+            params['primary_release_year'] = year
+
+        result = self._make_request('/search/movie', params)
+        if result and result.get('results'):
             return result['results'][0]
         return None
     

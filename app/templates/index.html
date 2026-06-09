@@ -1168,7 +1168,7 @@
                   <a href="https://www.themoviedb.org/settings/api" target="_blank" class="api-label-link" title="前往TMDB设置页面获取API密钥">TMDB API 密钥</a>
                 </span>
               </div>
-              <input type="text" v-model="formData.tmdb_api_key" class="form-control" placeholder="输入 TMDB API 密钥，用于获取电视节目的元数据" title="TMDB API密钥，用于获取电视节目的元数据">
+              <input type="text" v-model="formData.tmdb_api_key" class="form-control" placeholder="输入 TMDB API 密钥，用于影视发现海报和电视节目元数据" title="TMDB API 密钥，用于影视发现海报和电视节目元数据">
             </div>
             <div class="input-group api-config-group">
               <div class="input-group-prepend">
@@ -2319,7 +2319,6 @@
                          :src="getDiscoveryPosterUrl(item)"
                          :alt="item.title"
                          referrerpolicy="no-referrer"
-                         crossorigin="anonymous"
                          @error="handleImageError($event)">
                     <div class="discovery-rating" v-if="getDiscoveryRatingText(item)">
                       <i class="bi bi-star-fill"></i>{{ getDiscoveryRatingText(item) }}
@@ -2373,7 +2372,6 @@
                       <img :src="getDiscoveryPosterUrl(discovery.selectedItem)"
                            :alt="discovery.selectedItem.title"
                            referrerpolicy="no-referrer"
-                           crossorigin="anonymous"
                            @error="handleImageError($event)">
                     </div>
                     <div class="discovery-detail-info">

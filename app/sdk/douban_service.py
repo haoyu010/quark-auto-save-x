@@ -532,6 +532,71 @@ class DoubanService:
             return image_url.split('?', 1)[0]
         return image_url
 
+    def enrich_items_with_tmdb_posters(self, items: Any, tmdb_service: Any) -> Any:
+        """Prefer TMDB posters for discovery items when a configured TMDB service is available."""
+        if not isinstance(items, list) or not tmdb_service:
+            return items
+
+        is_configured = getattr(tmdb_service, 'is_configured', None)
+        if callable(is_configured) and not is_configured():
+            return items
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+
+            title = str(item.get('title') or '').strip()
+            if not title:
+                continue
+
+            year = str(item.get('year') or '').strip() or None
+            content_type = str(item.get('content_type') or '').strip().lower()
+
+            try:
+                if content_type == 'movie':
+                    search = getattr(tmdb_service, 'search_movie', None)
+                    match = search(title, year) if callable(search) else None
+                else:
+                    search = getattr(tmdb_service, 'search_tv_show', None)
+                    match = search(title, year) if callable(search) else None
+            except Exception:
+                match = None
+
+            if not isinstance(match, dict):
+                continue
+
+            poster_path = str(match.get('poster_path') or '').strip()
+            if not poster_path:
+                continue
+
+            build_image_url = getattr(tmdb_service, 'build_image_url', None)
+            if callable(build_image_url):
+                poster_url = build_image_url(poster_path, 'w500')
+            else:
+                if not poster_path.startswith('/'):
+                    poster_path = f'/{poster_path}'
+                poster_url = f'https://image.tmdb.org/t/p/w500{poster_path}'
+
+            if not poster_url:
+                continue
+
+            pic = item.get('pic')
+            if not isinstance(pic, dict):
+                pic = {}
+                item['pic'] = pic
+
+            existing_pic = str(pic.get('normal') or '').strip()
+            if existing_pic and not pic.get('douban'):
+                pic['douban'] = existing_pic
+
+            pic['normal'] = poster_url
+            pic['tmdb'] = poster_url
+            item['tmdb_id'] = match.get('id')
+            item['tmdb_poster_path'] = poster_path
+            item['image_source'] = 'tmdb'
+
+        return items
+
     def _process_search_target(self, target: Optional[Dict[str, Any]], requested_type: str = "all") -> Optional[Dict[str, Any]]:
         if not isinstance(target, dict):
             return None

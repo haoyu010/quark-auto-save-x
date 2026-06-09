@@ -9299,6 +9299,30 @@ def purge_calendar_by_task():
 # 豆瓣API路由
 
 # 通用电影接口
+def enrich_discovery_result_images(result):
+    """Use configured TMDB posters to improve discovery wall images."""
+    try:
+        if not isinstance(result, dict):
+            return result
+        data = result.get('data')
+        if not isinstance(data, dict):
+            return result
+        items = data.get('items')
+        if not isinstance(items, list) or not items:
+            return result
+
+        tmdb_api_key = str(config_data.get('tmdb_api_key', '') or '').strip()
+        if not tmdb_api_key:
+            return result
+
+        tmdb_service = TMDBService(tmdb_api_key, get_poster_language_setting())
+        douban_service.enrich_items_with_tmdb_posters(items, tmdb_service)
+        return result
+    except Exception as e:
+        logging.warning(f"TMDB discovery poster enrichment failed: {e}")
+        return result
+
+
 @app.route("/api/douban/movie/recent_hot")
 def get_movie_recent_hot():
     """获取电影榜单 - 通用接口"""
@@ -9318,6 +9342,7 @@ def get_movie_recent_hot():
 
         main_category = category_mapping.get(category, 'movie_hot')
         result = douban_service.get_list_data(main_category, type_param, limit, start)
+        result = enrich_discovery_result_images(result)
 
         return jsonify(result)
     except Exception as e:
@@ -9336,6 +9361,7 @@ def get_movie_list(movie_type, sub_category):
 
         main_category = f"movie_{movie_type}"
         result = douban_service.get_list_data(main_category, sub_category, limit, start)
+        result = enrich_discovery_result_images(result)
 
         return jsonify(result)
     except Exception as e:
@@ -9369,6 +9395,7 @@ def get_tv_recent_hot():
             main_category = 'tv_drama'
 
         result = douban_service.get_list_data(main_category, type_param, limit, start)
+        result = enrich_discovery_result_images(result)
 
         return jsonify(result)
     except Exception as e:
@@ -9387,6 +9414,7 @@ def get_tv_list(tv_type, sub_category):
 
         main_category = f"tv_{tv_type}"
         result = douban_service.get_list_data(main_category, sub_category, limit, start)
+        result = enrich_discovery_result_images(result)
 
         return jsonify(result)
     except Exception as e:
@@ -9407,6 +9435,7 @@ def search_douban_subjects():
         start = int(request.args.get('start', 0))
 
         result = douban_service.search_subjects(keyword, content_type, limit, start)
+        result = enrich_discovery_result_images(result)
         return jsonify(result)
     except Exception as e:
         return jsonify({
