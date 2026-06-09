@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class TMDBService:
     IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
 
-    def __init__(self, api_key: str = None, poster_language: str = "zh-CN"):
+    def __init__(self, api_key: str = None, poster_language: str = "zh-CN", request_timeout: float = 10, max_retries: int = 3):
         self.api_key = api_key
         # 首选改为 api.tmdb.org，备选为 api.themoviedb.org
         self.primary_url = "https://api.tmdb.org/3"
@@ -26,9 +26,10 @@ class TMDBService:
         self.current_url = self.primary_url
         self.language = "zh-CN"  # 返回中文数据
         self.poster_language = poster_language  # 海报语言设置
+        self.request_timeout = request_timeout
         # 复用会话，开启重试
         self.session = requests.Session()
-        retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET"])  # 简单退避
+        retries = Retry(total=max_retries, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET"])  # 简单退避
         adapter = HTTPAdapter(max_retries=retries, pool_connections=20, pool_maxsize=50)
         self.session.mount('http://', adapter)
         self.session.mount('https://', adapter)
@@ -92,7 +93,7 @@ class TMDBService:
         # 尝试主地址
         try:
             url = f"{self.current_url}{endpoint}"
-            response = self.session.get(url, params=params, timeout=10)
+            response = self.session.get(url, params=params, timeout=self.request_timeout)
             response.raise_for_status()
             data = response.json()
             try:
@@ -109,7 +110,7 @@ class TMDBService:
                 self.current_url = self.backup_url
                 try:
                     url = f"{self.current_url}{endpoint}"
-                    response = self.session.get(url, params=params, timeout=10)
+                    response = self.session.get(url, params=params, timeout=self.request_timeout)
                     response.raise_for_status()
                     logger.debug("TMDB备用地址连接成功")
                     data = response.json()

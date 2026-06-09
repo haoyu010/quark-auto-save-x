@@ -12011,6 +12011,14 @@ main div[v-if="activeTab === 'calendar'"] .tasklist-filter-row {
   box-shadow: var(--qasx-shadow-sm);
 }
 
+.task-dashboard-metric .metric-label {
+  color: #64748b;
+}
+
+.task-dashboard-metric strong {
+  color: var(--qasx-ink);
+}
+
 .task {
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
@@ -12795,6 +12803,26 @@ body:not(.login-page) {
     background:
       linear-gradient(135deg, #111827 0%, #164e63 54%, #0f766e 100%);
     box-shadow: none;
+  }
+
+  .task-dashboard-hero .task-dashboard-copy h1 {
+    color: #ffffff !important;
+  }
+
+  .task-dashboard-hero .task-dashboard-copy p {
+    color: #dbeafe !important;
+  }
+
+  .task-dashboard-hero .task-dashboard-metric {
+    background: rgba(255, 255, 255, 0.96) !important;
+  }
+
+  .task-dashboard-hero .task-dashboard-metric .metric-label {
+    color: #64748b !important;
+  }
+
+  .task-dashboard-hero .task-dashboard-metric strong {
+    color: #0f172a !important;
   }
 
   .task-dashboard-metric,

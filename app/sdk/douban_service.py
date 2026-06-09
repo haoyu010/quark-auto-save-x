@@ -7,6 +7,7 @@
 import requests
 from typing import Dict, Optional, Any
 from urllib.parse import urlsplit, urlunsplit
+import time
 
 
 class DoubanService:
@@ -532,7 +533,13 @@ class DoubanService:
             return image_url.split('?', 1)[0]
         return image_url
 
-    def enrich_items_with_tmdb_posters(self, items: Any, tmdb_service: Any) -> Any:
+    def enrich_items_with_tmdb_posters(
+        self,
+        items: Any,
+        tmdb_service: Any,
+        max_items: Optional[int] = None,
+        time_budget_seconds: Optional[float] = None,
+    ) -> Any:
         """Prefer TMDB posters for discovery items when a configured TMDB service is available."""
         if not isinstance(items, list) or not tmdb_service:
             return items
@@ -541,7 +548,15 @@ class DoubanService:
         if callable(is_configured) and not is_configured():
             return items
 
-        for item in items:
+        items_to_enrich = items
+        if isinstance(max_items, int) and max_items > 0:
+            items_to_enrich = items[:max_items]
+
+        started_at = time.monotonic()
+        for item in items_to_enrich:
+            if time_budget_seconds and time.monotonic() - started_at >= time_budget_seconds:
+                break
+
             if not isinstance(item, dict):
                 continue
 

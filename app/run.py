@@ -9315,8 +9315,18 @@ def enrich_discovery_result_images(result):
         if not tmdb_api_key:
             return result
 
-        tmdb_service = TMDBService(tmdb_api_key, get_poster_language_setting())
-        douban_service.enrich_items_with_tmdb_posters(items, tmdb_service)
+        tmdb_service = TMDBService(
+            tmdb_api_key,
+            get_poster_language_setting(),
+            request_timeout=1.5,
+            max_retries=0,
+        )
+        douban_service.enrich_items_with_tmdb_posters(
+            items,
+            tmdb_service,
+            max_items=8,
+            time_budget_seconds=5,
+        )
         return result
     except Exception as e:
         logging.warning(f"TMDB discovery poster enrichment failed: {e}")

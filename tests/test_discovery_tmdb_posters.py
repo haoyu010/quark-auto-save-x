@@ -86,6 +86,25 @@ class DiscoveryTMDBPosterTest(unittest.TestCase):
         self.assertEqual(items[0]["pic"]["normal"], "https://img.doubanio.com/view/photo/public/existing.jpg")
         self.assertNotIn("image_source", items[0])
 
+    def test_enrich_items_respects_max_items_for_discovery_speed(self):
+        items = [
+            {
+                "title": f"movie-{index}",
+                "year": "2026",
+                "content_type": "movie",
+                "pic": {"normal": f"https://img.doubanio.com/view/photo/public/{index}.jpg"},
+            }
+            for index in range(6)
+        ]
+        tmdb = FakeTMDBService(movie_result={"id": 100, "poster_path": "/poster.jpg"})
+
+        DoubanService().enrich_items_with_tmdb_posters(items, tmdb, max_items=2)
+
+        self.assertEqual(tmdb.movie_calls, [("movie-0", "2026"), ("movie-1", "2026")])
+        self.assertEqual(items[0]["image_source"], "tmdb")
+        self.assertEqual(items[1]["image_source"], "tmdb")
+        self.assertNotIn("image_source", items[2])
+
 
 if __name__ == "__main__":
     unittest.main()
