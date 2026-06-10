@@ -7,8 +7,9 @@ class CloudSaver:
     CloudSaver 类，用于获取云盘资源
     """
 
-    def __init__(self, server):
+    def __init__(self, server, timeout=8):
         self.server = server
+        self.timeout = timeout
         self.username = None
         self.password = None
         self.token = None
@@ -27,7 +28,7 @@ class CloudSaver:
         try:
             url = f"{self.server}/api/user/login"
             data = {"username": self.username, "password": self.password}
-            response = self.session.post(url, json=data)
+            response = self.session.post(url, json=data, timeout=self.timeout)
             result = response.json()
             if result.get("success"):
                 self.token = result.get("data", {}).get("token")
@@ -55,7 +56,7 @@ class CloudSaver:
         try:
             url = f"{self.server}/api/search"
             params = {"keyword": keyword, "lastMessageId": last_message_id}
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=self.timeout)
             result = response.json()
             if result.get("success"):
                 data = result.get("data", [])

@@ -6,8 +6,9 @@ from typing import List, Dict, Any
 class PanSou:
     """PanSou 资源搜索客户端"""
     
-    def __init__(self, server: str):
+    def __init__(self, server: str, timeout: int = 8):
         self.server = server.rstrip("/") if server else ""
+        self.timeout = timeout
         self.session = requests.Session()
         # 使用标准请求头
         self.session.headers.update({
@@ -19,7 +20,7 @@ class PanSou:
     def _request_json(self, url: str, params: dict):
         """发送 GET 请求并解析 JSON 响应"""
         try:
-            resp = self.session.get(url, params=params, timeout=15)
+            resp = self.session.get(url, params=params, timeout=self.timeout)
             return resp.json()
         except Exception as e:
             return {"success": False, "message": str(e)}

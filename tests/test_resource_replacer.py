@@ -98,6 +98,15 @@ class ResourceAutoReplacerTest(unittest.TestCase):
         self.assertFalse(result["replaced"])
         self.assertEqual(task["shareurl"], "old")
 
+    def test_loads_search_timeout_setting(self):
+        replacer = ResourceAutoReplacer(
+            {"auto_replace_invalid_shareurl": {"enabled": True, "timeout_seconds": 6}},
+            FakeAccount({}),
+            searchers=[],
+        )
+
+        self.assertEqual(replacer.settings["search_timeout"], 6)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -124,11 +124,13 @@ class ResourceAutoReplacer:
             min_score = raw.get("min_score", task_settings.get("auto_replace_min_score", 85))
             sources = raw.get("sources", ["pansou", "cloudsaver"])
             quality_policy = raw.get("quality_policy", "no_downgrade")
+            search_timeout = raw.get("timeout_seconds", task_settings.get("auto_replace_timeout_seconds", 8))
         else:
             enabled = self._as_enabled(raw)
             min_score = task_settings.get("auto_replace_min_score", 85)
             sources = task_settings.get("auto_replace_sources", ["pansou", "cloudsaver"])
             quality_policy = task_settings.get("auto_replace_quality_policy", "no_downgrade")
+            search_timeout = task_settings.get("auto_replace_timeout_seconds", 8)
 
         try:
             min_score = int(min_score)
@@ -138,6 +140,14 @@ class ResourceAutoReplacer:
             min_score = 0
         if min_score > 100:
             min_score = 100
+        try:
+            search_timeout = int(search_timeout)
+        except Exception:
+            search_timeout = 8
+        if search_timeout < 2:
+            search_timeout = 2
+        if search_timeout > 60:
+            search_timeout = 60
         if isinstance(sources, str):
             sources = [item.strip().lower() for item in sources.split(",") if item.strip()]
         sources = [str(item).strip().lower() for item in (sources or []) if str(item).strip()]
@@ -146,6 +156,7 @@ class ResourceAutoReplacer:
             "min_score": min_score,
             "sources": sources or ["pansou", "cloudsaver"],
             "quality_policy": quality_policy or "no_downgrade",
+            "search_timeout": search_timeout,
         }
 
     def _build_searchers(self) -> List[Callable[[str], Iterable[Dict[str, Any]]]]:
@@ -159,7 +170,7 @@ class ResourceAutoReplacer:
                 try:
                     from .cloudsaver import CloudSaver
 
-                    cs = CloudSaver(cs_data.get("server"))
+                    cs = CloudSaver(cs_data.get("server"), timeout=self.settings["search_timeout"])
                     cs.set_auth(
                         cs_data.get("username", ""),
                         cs_data.get("password", ""),
@@ -184,7 +195,7 @@ class ResourceAutoReplacer:
                 try:
                     from .pansou import PanSou
 
-                    ps = PanSou(ps_data.get("server"))
+                    ps = PanSou(ps_data.get("server"), timeout=self.settings["search_timeout"])
 
                     def pansou_search(query, client=ps):
                         result = client.search(query)
