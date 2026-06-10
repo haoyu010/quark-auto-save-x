@@ -669,60 +669,6 @@
               </div>
             </div>
 
-            <div class="row title" v-if="Object.keys(getAvailablePlugins(formData.plugins)).length" title="插件设置，具体键值由插件定义，查阅Wiki了解详情">
-              <div class="col">
-                <h2 style="display: inline-block; font-size: 1.5rem;">插件设置</h2>
-                <span class="badge badge-pill badge-light">
-                  <a href="https://github.com/x1ao4/quark-auto-save-x/wiki/插件设置" target="_blank"><i class="bi bi-question-circle"></i></a>
-                </span>
-              </div>
-            </div>
-            <div v-for="(plugin, pluginName) in getAvailablePlugins(formData.plugins)" :key="pluginName" style="margin-bottom: -8px;" :style="pluginName === Object.keys(getAvailablePlugins(formData.plugins))[0] ? 'margin-top: -8px;' : ''">
-              <div class="form-group row mb-0" style="display:flex; align-items:center;">
-                <div data-toggle="collapse" :data-target="'#collapse_'+pluginName" aria-expanded="true" :aria-controls="'collapse_'+pluginName">
-                  <div class="btn btn-block text-left">
-                    <i class="bi bi-caret-right-fill"></i> <span v-html="getPluginDisplayName(pluginName)"></span>
-                  </div>
-                </div>
-              </div>
-              <div class="collapse" :id="'collapse_'+pluginName" style="margin-left: 26px;">
-                <div v-for="(value, key, keyIndex) in plugin" :key="key" class="input-group mb-2" :style="{ marginBottom: keyIndex === Object.keys(plugin).length - 1 && pluginName === Object.keys(getAvailablePlugins(formData.plugins)).pop() ? '8.5px !important' : '' }">
-                  <div class="input-group-prepend">
-                    <span class="input-group-text" v-html="key" :title="getPluginConfigHelp(pluginName, key)"></span>
-                  </div>
-                  <input type="text" v-model="formData.plugins[pluginName][key]" class="form-control"
-                    :placeholder="getPluginConfigPlaceholder(pluginName, key)"
-                    :title="getPluginConfigHelp(pluginName, key)">
-                </div>
-                <!-- 为特定插件添加全局配置选项 -->
-                <div v-if="['aria2', 'alist_strm_gen', 'emby'].includes(pluginName)" class="input-group mb-2">
-                  <div class="input-group-prepend">
-                    <span class="input-group-text" :title="getPluginConfigModeHelp(pluginName)">插件配置模式</span>
-                  </div>
-                  <select class="form-control" v-model="formData.plugin_config_mode[pluginName]" @change="onPluginConfigModeChange(pluginName)" :title="getPluginConfigModeHelp(pluginName)">
-                    <option value="independent">独立配置</option>
-                    <option value="global">全局配置</option>
-                  </select>
-                </div>
-                <!-- 全局插件配置选项 -->
-                <div v-if="['aria2', 'alist_strm_gen', 'emby'].includes(pluginName) && formData.plugin_config_mode[pluginName] === 'global'">
-                  <div v-for="(taskConfig, taskKey) in getPluginTaskConfig(pluginName)" :key="taskKey" class="input-group mb-2">
-                    <div class="input-group-prepend">
-                      <span class="input-group-text" v-html="taskKey" :title="getPluginTaskConfigHelp(pluginName, taskKey)"></span>
-                    </div>
-                    <select v-if="typeof formData.global_plugin_config[pluginName][taskKey] === 'boolean'" class="form-control" v-model="formData.global_plugin_config[pluginName][taskKey]" @change="onGlobalPluginConfigChange()" :title="getPluginTaskConfigHelp(pluginName, taskKey)">
-                      <option :value="true">true</option>
-                      <option :value="false">false</option>
-                    </select>
-                    <input v-else type="text" class="form-control" v-model="formData.global_plugin_config[pluginName][taskKey]"
-                      :placeholder="getPluginTaskConfigPlaceholder(pluginName, taskKey)"
-                      :title="getPluginTaskConfigHelp(pluginName, taskKey)"
-                      @input="onGlobalPluginConfigChange()">
-                  </div>
-                </div>
-              </div>
-            </div>
-            
             <div class="row title" title="资源搜索服务配置，用于任务名称智能搜索，查阅Wiki了解详情">
               <div class="col">
                 <h2 style="display: inline-block; font-size: 1.5rem;">搜索来源</h2>
@@ -731,63 +677,86 @@
                 </span>
               </div>
             </div>
-            <!-- 按插件风格显示为可展开项 -->
-            <div style="margin-bottom: -8px;">
-              <!-- CloudSaver -->
-              <div style="margin-bottom: -8px; margin-top: -8px;">
-                <div class="form-group row mb-0" style="display:flex; align-items:center;">
-                  <div data-toggle="collapse" data-target="#collapse_source_cloudsaver" aria-expanded="true" aria-controls="collapse_source_cloudsaver">
-                    <div class="btn btn-block text-left">
-                      <i class="bi bi-caret-right-fill"></i> CloudSaver
-                    </div>
+            <section class="source-panel telegram-source-panel" v-if="formData.source && formData.source.telegram">
+              <div class="source-panel-head">
+                <div class="source-title">
+                  <span class="source-icon"><i class="bi bi-telegram"></i></span>
+                  <div>
+                    <h3>Telegram 频道</h3>
+                    <span>{{ (formData.source.telegram.channels || []).length }} 个频道</span>
                   </div>
                 </div>
-                <div class="collapse" id="collapse_source_cloudsaver" style="margin-left: 26px;">
-                  <div class="input-group mb-2">
-                    <div class="input-group-prepend">
-                      <span class="input-group-text">服务器</span>
-                    </div>
-                    <input type="text" v-model="formData.source.cloudsaver.server" class="form-control" placeholder="CloudSaver 服务器地址，如：http://192.168.1.100:8008">
-                  </div>
-                  <div class="input-group mb-2">
-                    <div class="input-group-prepend">
-                      <span class="input-group-text">用户名</span>
-                    </div>
-                    <input type="text" v-model="formData.source.cloudsaver.username" class="form-control" placeholder="CloudSaver 用户名">
-                  </div>
-                  <div class="input-group mb-2">
-                    <div class="input-group-prepend">
-                      <span class="input-group-text">密码</span>
-                    </div>
-                    <input :type="showCloudSaverPassword ? 'text' : 'password'" v-model="formData.source.cloudsaver.password" class="form-control" placeholder="CloudSaver 密码">
-                    <div class="input-group-append">
-                      <button type="button" class="btn btn-outline-secondary" @click="toggleCloudSaverPassword">
-                        <i :class="['bi', showCloudSaverPassword ? 'bi-eye' : 'bi-eye-slash']"></i>
-                      </button>
-                    </div>
-                  </div>
+                <div class="source-actions">
+                  <label class="mini-switch" title="启用搜索">
+                    <input type="checkbox" v-model="formData.source.telegram.enabled">
+                    <span></span>
+                  </label>
+                  <button type="button" class="btn btn-outline-primary icon-btn" :disabled="telegramIndexing" @click="indexTelegramSource(false)" title="索引">
+                    <i :class="telegramIndexing ? 'spinner-border spinner-border-sm' : 'bi bi-arrow-clockwise'"></i>
+                  </button>
+                  <button type="button" class="btn btn-outline-primary icon-btn" :disabled="telegramIndexing" @click="indexTelegramSource(true)" title="深度索引">
+                    <i class="bi bi-radar"></i>
+                  </button>
                 </div>
               </div>
 
-              <!-- PanSou -->
-              <div style="margin-bottom: -9.5px;">
-                <div class="form-group row mb-0" style="display:flex; align-items:center;">
-                  <div data-toggle="collapse" data-target="#collapse_source_pansou" aria-expanded="false" aria-controls="collapse_source_pansou">
-                    <div class="btn btn-block text-left">
-                      <i class="bi bi-caret-right-fill"></i> PanSou
-                    </div>
+              <div class="source-grid">
+                <label class="source-field compact">
+                  <span>自动换源</span>
+                  <select v-model="formData.source.telegram.auto_replace" class="form-control">
+                    <option :value="true">启用</option>
+                    <option :value="false">禁用</option>
+                  </select>
+                </label>
+                <label class="source-field">
+                  <span>代理</span>
+                  <input type="text" v-model="formData.source.telegram.proxy" class="form-control" placeholder="http://127.0.0.1:7890">
+                </label>
+                <label class="source-field compact">
+                  <span>读取</span>
+                  <input type="number" min="1" max="500" v-model.number="formData.source.telegram.read_limit" class="form-control">
+                </label>
+                <label class="source-field compact">
+                  <span>深扫</span>
+                  <input type="number" min="1" max="5000" v-model.number="formData.source.telegram.deep_limit" class="form-control">
+                </label>
+                <label class="source-field compact">
+                  <span>验证</span>
+                  <input type="number" min="1" max="50" v-model.number="formData.source.telegram.verify_limit" class="form-control">
+                </label>
+                <label class="source-field compact">
+                  <span>缓存</span>
+                  <input type="number" min="60" v-model.number="formData.source.telegram.cache_ttl_seconds" class="form-control">
+                </label>
+                <label class="source-field compact">
+                  <span>超时</span>
+                  <input type="number" min="2" max="60" v-model.number="formData.source.telegram.timeout_seconds" class="form-control">
+                </label>
+              </div>
+
+              <div class="source-list-grid">
+                <div class="source-list-card">
+                  <div class="source-list-head">
+                    <span>频道</span>
+                    <button type="button" class="btn btn-outline-primary icon-btn" @click="addTelegramChannel" title="添加频道"><i class="bi bi-plus-lg"></i></button>
+                  </div>
+                  <div class="source-list-row" v-for="(channel, index) in formData.source.telegram.channels" :key="'tg-channel-'+index">
+                    <input type="text" v-model="formData.source.telegram.channels[index]" class="form-control" placeholder="https://t.me/channel">
+                    <button type="button" class="btn btn-outline-danger icon-btn" @click="removeTelegramChannel(index)" title="删除频道"><i class="bi bi-dash-lg"></i></button>
                   </div>
                 </div>
-                <div class="collapse" id="collapse_source_pansou" style="margin-left: 26px;">
-                  <div class="input-group mb-2" style="margin-bottom: 10.5px !important;">
-                    <div class="input-group-prepend">
-                      <span class="input-group-text">服务器</span>
-                    </div>
-                    <input type="text" v-model="formData.source.pansou.server" class="form-control" placeholder="PanSou 服务器地址，如：http://192.168.1.100:80，默认地址 https://so.252035.xyz 为 PanSou 官方地址，建议自部署以获得更稳定的体验">
+                <div class="source-list-card">
+                  <div class="source-list-head">
+                    <span>关键词</span>
+                    <button type="button" class="btn btn-outline-primary icon-btn" @click="addTelegramKeyword" title="添加关键词"><i class="bi bi-plus-lg"></i></button>
+                  </div>
+                  <div class="source-list-row" v-for="(keyword, index) in formData.source.telegram.keywords" :key="'tg-keyword-'+index">
+                    <input type="text" v-model="formData.source.telegram.keywords[index]" class="form-control" placeholder="可选">
+                    <button type="button" class="btn btn-outline-danger icon-btn" @click="removeTelegramKeyword(index)" title="删除关键词"><i class="bi bi-dash-lg"></i></button>
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
             <div class="row title" title="预定义的正则匹配规则，在任务列表中可直接点击使用，查阅Wiki了解详情">
               <div class="col">
@@ -1433,9 +1402,7 @@
                   </div>
                   <div class="col-auto task-buttons">
                     <template v-for="key in formData.button_display_order">
-                      <button v-if="key==='refresh_plex' && formData.plugins && formData.plugins.plex && formData.plugins.plex.url && formData.plugins.plex.token && formData.plugins.plex.quark_root_path && formData.button_display.refresh_plex !== 'disabled'" type="button" class="btn btn-outline-plex" :class="{'hover-only': formData.button_display.refresh_plex === 'hover'}" @click="refreshPlexLibrary(task.__originalIndex !== undefined ? task.__originalIndex : index)" title="刷新Plex媒体库"><img src="./static/images/Plex.svg" class="plex-icon"></button>
-                      <button v-else-if="key==='refresh_alist' && formData.plugins && formData.plugins.alist && formData.plugins.alist.url && formData.plugins.alist.token && formData.plugins.alist.storage_id && formData.button_display.refresh_alist !== 'disabled'" type="button" class="btn btn-outline-alist" :class="{'hover-only': formData.button_display.refresh_alist === 'hover'}" @click="refreshAlistDirectory(task.__originalIndex !== undefined ? task.__originalIndex : index)" title="刷新AList目录"><img src="https://cdn.jsdelivr.net/gh/alist-org/logo@main/logo.svg" class="alist-icon"></button>
-                      <template v-else-if="key==='run_task'">
+                      <template v-if="key==='run_task'">
                         <button v-if="!task.shareurl_ban" type="button" class="btn btn-outline-primary" :class="{'hover-only': formData.button_display.run_task === 'hover'}" @click="runScriptNow(task.__originalIndex !== undefined ? task.__originalIndex : index)" title="运行此任务"><i class="bi bi-caret-right"></i></button>
                         <button v-else type="button" class="btn btn-warning" :title="formatShareUrlBanMessage(task.shareurl_ban) || task.shareurl_ban" disabled><i class="bi bi-exclamation-circle"></i></button>
                       </template>
@@ -1473,7 +1440,7 @@
                             <span v-html="suggestion.verify ? '✅': ''"></span> {{ suggestion.taskname }}
                             <small class="text-muted">
                               <a :href="suggestion.shareurl" target="_blank" @click.stop> · {{ suggestion.shareurl.replace(/^https?:\/\/pan\.(quark|qoark)\.cn\/s\//, '').split('#')[0] }}</a>
-                              <template v-if="suggestion.source"><span class="source-badge" :class="suggestion.source.toLowerCase()" :data-publish-date="suggestion.publish_date ? ' · ' + formatPublishDate(suggestion.publish_date, suggestion.pansou_source, suggestion.source) : ''">{{ suggestion.source }}</span></template>
+                              <template v-if="suggestion.source"><span class="source-badge" :class="suggestion.source.toLowerCase()" :data-publish-date="suggestion.publish_date ? ' · ' + formatPublishDate(suggestion.publish_date, suggestion.telegram_source, suggestion.source) : ''">{{ suggestion.source }}</span></template>
                             </small>
                           </div>
                         </div>
@@ -1616,12 +1583,6 @@
                       </div>
                     </div>
                   </div>
-                  <div class="form-group row" v-if="Object.keys(getAvailablePlugins(formData.plugins)).length" :title="getPluginConfigTitle(task)">
-                    <label class="col-sm-2 col-form-label">插件配置</label>
-                    <div class="col-sm-10">
-                      <v-jsoneditor v-model="task.addition" :options="{mode:'tree'}" :plus="false" height="151.5px" style="margin-bottom: -8px;" :disabled="isPluginConfigDisabled(task)"></v-jsoneditor>
-                    </div>
-                  </div>
                 </div>
               </template>
             </div>
@@ -1669,14 +1630,6 @@
                       <div class="discovery-edit-metadata tasklist-edit-metadata-btn" @click.stop="openEditMetadataModal(getCalendarTaskByName(task.taskname) || { task_name: task.taskname })" title="编辑元数据">
                         <i class="bi bi-tag"></i>
                       </div>
-                      <template v-for="key in formData.button_display_order">
-                        <div v-if="key==='refresh_plex' && formData.plugins && formData.plugins.plex && formData.plugins.plex.url && formData.plugins.plex.token && formData.plugins.plex.quark_root_path && formData.button_display.refresh_plex !== 'disabled'" class="discovery-edit-metadata tasklist-plex-btn" @click.stop="refreshPlexLibrary(task.__originalIndex !== undefined ? task.__originalIndex : index)" title="刷新Plex媒体库">
-                          <img src="./static/images/Plex.svg" class="plex-icon" style="filter: brightness(0) invert(1);">
-                        </div>
-                        <div v-else-if="key==='refresh_alist' && formData.plugins && formData.plugins.alist && formData.plugins.alist.url && formData.plugins.alist.token && formData.plugins.alist.storage_id && formData.button_display.refresh_alist !== 'disabled'" class="discovery-edit-metadata tasklist-alist-btn" @click.stop="refreshAlistDirectory(task.__originalIndex !== undefined ? task.__originalIndex : index)" title="刷新AList目录">
-                          <img src="https://cdn.jsdelivr.net/gh/alist-org/logo@main/logo.svg" class="alist-icon" style="filter: brightness(0) invert(1);">
-                        </div>
-                      </template>
                     </div>
 
                     <!-- 转存进度徽标（复用评分样式） -->
@@ -1971,8 +1924,6 @@
                       <option v-for="(account, index) in accountsDetail" :key="index" :value="index">{{ account.display_text }}</option>
                     </select>
                   </div>
-                  <button type="button" class="btn btn-outline-plex batch-rename-btn" v-if="formData.plugins && formData.plugins.plex && formData.plugins.plex.url && formData.plugins.plex.token && formData.plugins.plex.quark_root_path && formData.button_display.refresh_plex !== 'disabled'" @click="refreshFileManagerPlexLibrary" title="刷新Plex媒体库"><img src="./static/images/Plex.svg" class="plex-icon"></button>
-                  <button type="button" class="btn btn-outline-alist batch-rename-btn" v-if="formData.plugins && formData.plugins.alist && formData.plugins.alist.url && formData.plugins.alist.token && formData.plugins.alist.storage_id && formData.button_display.refresh_alist !== 'disabled'" @click="refreshFileManagerAlistDirectory" title="刷新AList目录"><img src="https://cdn.jsdelivr.net/gh/alist-org/logo@main/logo.svg" class="alist-icon"></button>
                   <button type="button" class="btn btn-outline-primary batch-rename-btn" @click="createNewFolder" title="新建文件夹">
                     <i class="bi bi-folder-plus"></i>
                   </button>
@@ -1991,8 +1942,6 @@
                         <option v-for="(account, index) in accountsDetail" :key="index" :value="index">{{ account.display_text }}</option>
                       </select>
                     </div>
-                    <button type="button" class="btn btn-outline-plex batch-rename-btn" v-if="formData.plugins && formData.plugins.plex && formData.plugins.plex.url && formData.plugins.plex.token && formData.plugins.plex.quark_root_path && formData.button_display.refresh_plex !== 'disabled'" @click="refreshFileManagerPlexLibrary" title="刷新Plex媒体库"><img src="./static/images/Plex.svg" class="plex-icon"></button>
-                    <button type="button" class="btn btn-outline-alist batch-rename-btn" v-if="formData.plugins && formData.plugins.alist && formData.plugins.alist.url && formData.plugins.alist.token && formData.plugins.alist.storage_id && formData.button_display.refresh_alist !== 'disabled'" @click="refreshFileManagerAlistDirectory" title="刷新AList目录"><img src="https://cdn.jsdelivr.net/gh/alist-org/logo@main/logo.svg" class="alist-icon"></button>
                     <button type="button" class="btn btn-outline-primary batch-rename-btn" @click="createNewFolder" title="新建文件夹">
                       <i class="bi bi-folder-plus"></i>
                     </button>
@@ -3132,7 +3081,7 @@
                         <span v-html="suggestion.verify ? '✅': ''"></span> {{ suggestion.taskname }}
                         <small class="text-muted">
                           <a :href="suggestion.shareurl" target="_blank" @click.stop> · {{ suggestion.shareurl.replace(/^https?:\/\/pan\.(quark|qoark)\.cn\/s\//, '').split('#')[0] }}</a>
-                          <template v-if="suggestion.source"><span class="source-badge" :class="suggestion.source.toLowerCase()" :data-publish-date="suggestion.publish_date ? ' · ' + formatPublishDate(suggestion.publish_date, suggestion.pansou_source, suggestion.source) : ''">{{ suggestion.source }}</span></template>
+                          <template v-if="suggestion.source"><span class="source-badge" :class="suggestion.source.toLowerCase()" :data-publish-date="suggestion.publish_date ? ' · ' + formatPublishDate(suggestion.publish_date, suggestion.telegram_source, suggestion.source) : ''">{{ suggestion.source }}</span></template>
                         </small>
                       </div>
                     </div>
@@ -3272,12 +3221,6 @@
                     <input class="form-check-input" type="checkbox" :checked="(createTask.taskData.execution_mode || formData.execution_mode || 'manual') === 'auto'" @change="createTask.taskData.execution_mode = $event.target.checked ? 'auto' : 'manual'">
                     <label class="form-check-label">自动</label>
                   </div>
-                </div>
-              </div>
-              <div class="form-group row" v-if="Object.keys(getAvailablePlugins(formData.plugins)).length" :title="getCreateTaskPluginConfigTitle()">
-                <label class="col-sm-2 col-form-label">插件配置</label>
-                <div class="col-sm-10">
-                  <v-jsoneditor v-model="createTask.taskData.addition" :options="{mode:'tree'}" :plus="false" height="151.5px" :disabled="isPluginConfigDisabled(createTask.taskData)"></v-jsoneditor>
                 </div>
               </div>
             </div>
@@ -3494,7 +3437,6 @@
       data: {
         version: "[[ version ]]",
         versionTips: "",
-        plugin_flags: "[[ plugin_flags ]]",
         weekdays: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
         // 全局缓存穿透时间戳（兜底）
         imageCacheBustTick: 0,
@@ -3502,11 +3444,11 @@
         imageCacheBustById: {},       // { [tmdb_id:number]: number }
         imageCacheBustByShowName: {}, // { [show_name:string]: number }
         sidebarCollapsed: false,
-        showCloudSaverPassword: false,
         showWebuiPassword: false,
         showTelegramToken: false,
         showTelegramProxyAuth: false,
         telegramTesting: false,
+        telegramIndexing: false,
         telegramCorePushKeys: [
           'TG_ENABLED',
           'TG_BOT_TOKEN',
@@ -3517,14 +3459,6 @@
           'TG_PROXY_AUTH'
         ],
         pageWidthMode: 'medium', // 页面宽度模式：narrow, medium, wide
-        pluginDisplayAliases: {
-          alist: 'AList',
-          alist_strm: 'AList Strm',
-          alist_strm_gen: 'AList Strm Gen',
-          aria2: 'Aria2',
-          emby: 'Emby',
-          plex: 'Plex'
-        },
         configHasLoaded: false,
         formData: {
           cookie: [],
@@ -3538,7 +3472,6 @@
             TG_PROXY_AUTH: ''
           },
           push_notify_type: 'full',
-          media_servers: {},
           tasklist: [],
           magic_regex: {},
           episode_patterns: [],
@@ -3562,14 +3495,17 @@
             auto_extract_archive: "disabled"
           },
           source: {
-            cloudsaver: {
-              server: "",
-              username: "",
-              password: "",
-              token: ""
-            },
-            pansou: {
-              server: "https://so.252035.xyz"
+            telegram: {
+              enabled: true,
+              auto_replace: true,
+              proxy: "",
+              read_limit: 99,
+              deep_limit: 600,
+              verify_limit: 5,
+              timeout_seconds: 8,
+              cache_ttl_seconds: 900,
+              channels: ["https://t.me/mqte5", "https://t.me/Quark_Movies"],
+              keywords: []
             }
           },
           webui: {
@@ -3579,8 +3515,6 @@
           button_display: {
             run_task: "always",
             delete_task: "always",
-            refresh_plex: "always",
-            refresh_alist: "always",
             season_counts: "always",
             latest_update_date: "always",
             task_progress: "always",
@@ -3595,8 +3529,6 @@
           calendar_timezone_mode: "original",
           // 显示顺序（可拖拽修改）：按钮 + 信息
           button_display_order: [
-            "refresh_plex",
-            "refresh_alist",
             "run_task",
             "delete_task",
             "latest_transfer_file",
@@ -3619,25 +3551,8 @@
             // 运行日志显示范围（天），默认1天
             runtime_log_display_days: 1
           },
-          plugin_config_mode: {
-            aria2: "independent",
-            alist_strm_gen: "independent",
-            emby: "independent"
-          },
-          global_plugin_config: {
-            aria2: {
-              auto_download: true,
-              pause: false,
-              auto_delete_quark_files: false
-            },
-            alist_strm_gen: {
-              auto_gen: true
-            },
-            emby: {
-              try_match: true,
-              media_id: ""
-            }
-          },
+          plugin_config_mode: {},
+          global_plugin_config: {},
           tmdb_api_key: ""
         },
         userInfoList: [], // 用户信息列表
@@ -5789,8 +5704,6 @@
         },
         getDisplayLabel(key) {
           const map = {
-            refresh_plex: '刷新 Plex 媒体库',
-            refresh_alist: '刷新 AList 目录',
             run_task: '运行此任务',
             delete_task: '删除此任务',
             latest_transfer_file: '最近转存文件',
@@ -5806,8 +5719,6 @@
         getDisplayHelp(key) {
           const help = {
             // 按钮类
-            refresh_plex: '手动刷新Plex媒体库按钮，仅在正确配置Plex插件时显示并生效',
-            refresh_alist: '手动刷新AList目录按钮，仅在正确配置AList插件时显示并生效',
             run_task: '手动运行任务按钮，仅在任务资源有效时显示并生效',
             delete_task: '删除任务按钮，操作不可撤回，请谨慎使用',
 
@@ -5819,7 +5730,7 @@
             show_status: '电视节目的完播状态（如：本季终/已完结/已取消），依赖TMDB匹配的元数据，仅在配置了TMDB API、任务成功匹配到条目且节目已完播时显示',
             today_update_indicator: '任务在当日产生转存记录后，将显示当日更新标识'
           };
-          return help[key] || '设置该项目在任务列表中的显示行为：始终显示/悬停显示/禁用，个别项目受插件或TMDB匹配状态影响是否生效或展示';
+          return help[key] || '设置该项目在任务列表中的显示行为：始终显示/悬停显示/禁用';
         },
         // ----- 任务列表新增显示：集数统计/任务进度/节目状态 -----
         getTaskSeasonCounts(taskName) {
@@ -8773,215 +8684,11 @@
           }
         },
 
-        // 获取插件配置的占位符文本
-        getPluginConfigPlaceholder(pluginName, key) {
-          const placeholders = {
-            aria2: {
-              host_port: "Aria2 RPC 地址，如：192.168.1.100:6800",
-              secret: "Aria2 RPC 密钥",
-              dir: "下载目录，需要 Aria2 拥有读写权限，如：/downloads"
-            },
-            alist: {
-              url: "AList 服务器地址，如：http://192.168.1.100:5244",
-              token: "AList 访问令牌，在 AList 的管理 - 设置 - 其他中获取", 
-              storage_id: "AList 服务器夸克存储的 ID，多个 ID 用逗号分隔，如：1, 2, 3"
-            },
-            alist_strm: {
-              url: "AList Strm 服务器地址，如：http://192.168.1.100:5000",
-              cookie: "AList Strm 的 Cookie，通过 F12 抓取，关键参数：session=ey***",
-              config_id: "要触发运行的配置 ID，多个 ID 用逗号分隔，如：1, 2, 3"
-            },
-            alist_strm_gen: {
-              url: "AList 服务器地址，如：http://192.168.1.100:5244",
-              token: "AList 访问令牌，在 AList 的管理 - 设置 - 其他中获取",
-              storage_id: "AList 服务器夸克存储的 ID",
-              strm_save_dir: "生成的 strm 文件的保存路径，如：/volume1/media/strm，请确保宿主机路径和容器路径映射一致",
-              strm_replace_host: "strm 文件内链接的主机地址，可选，缺省时使用 url"
-            },
-            plex: {
-              url: "Plex 服务器地址，如：http://192.168.1.100:32400",
-              token: "Plex 访问令牌，通过 F12 抓取（或通过 XML 地址获取）",
-              quark_root_path: "夸克根目录在 Plex 中的路径，多个路径用逗号分隔，如：/volume1/media/quark1, /volume1/media/quark2"
-            },
-            emby: {
-              url: "Emby 服务器地址，如：http://192.168.1.100:8096",
-              token: "Emby 的 API 密钥，在 Emby 的管理 - 高级 - API 密钥中生成"
-            }
-          };
-          
-          return placeholders[pluginName]?.[key] || '';
-        },
-
-        // 获取插件配置的帮助文本
-        getPluginConfigHelp(pluginName, key) {
-          const helpTexts = {
-            aria2: {
-              host_port: "Aria2 RPC服务地址，确保网络可达且端口开放",
-              secret: "Aria2 RPC密钥，用于安全认证",
-              dir: "下载文件的保存目录，确保Aria2有读写权限"
-            },
-            alist: {
-              url: "AList服务器地址，用于获取存储信息",
-              token: "AList访问令牌，用于API调用",
-              storage_id: "多账号支持：多个存储ID用逗号分隔，顺序与Cookie顺序对应，如：1, 2, 3"
-            },
-            alist_strm: {
-              url: "AList Strm服务器地址",
-              cookie: "AList Strm的Cookie",
-              config_id: "要触发运行的配置ID，多个ID用逗号分隔，如：1, 2, 3"
-            },
-            alist_strm_gen: {
-              url: "AList服务器地址，用于获取存储信息",
-              token: "AList访问令牌，用于API调用",
-              storage_id: "夸克网盘在AList中的存储ID，在AList的存储管理中查看",
-              strm_save_dir: "生成的strm文件的保存路径，确保有写入权限",
-              strm_replace_host: "strm文件内链接的主机地址，用于替换默认的AList地址"
-            },
-            plex: {
-              url: "Plex服务器地址",
-              token: "Plex访问令牌",
-              quark_root_path: "夸克根目录在Plex中的路径，多个路径用逗号分隔，如：/volume1/media/quark1, /volume1/media/quark2"
-            },
-            emby: {
-              url: "Emby服务器地址",
-              token: "Emby的API密钥"
-            }
-          };
-          
-          return helpTexts[pluginName]?.[key] || '';
-        },
-
-        // 获取插件任务配置
-        getPluginTaskConfig(pluginName) {
-          const taskConfigs = {
-            aria2: {
-              auto_download: true,
-              pause: false,
-              auto_delete_quark_files: false
-            },
-            alist_strm_gen: {
-              auto_gen: true
-            },
-            emby: {
-              try_match: true,
-              media_id: ""
-            }
-          };
-          return taskConfigs[pluginName] || {};
-        },
-
-        // 获取插件配置模式的帮助文本
-        getPluginConfigModeHelp(pluginName) {
-          return "选择插件的配置模式：独立配置允许每个任务单独设置，全局配置则所有任务共享同一套设置，且只能在系统配置页面修改";
-        },
-
-        // 获取插件任务配置的帮助文本
-        getPluginTaskConfigHelp(pluginName, key) {
-          const helpTexts = {
-            aria2: {
-              auto_download: "是否自动添加下载任务",
-              pause: "添加任务后为暂停状态，不自动开始（手动下载）",
-              auto_delete_quark_files: "是否在添加下载任务后自动删除夸克网盘文件"
-            },
-            alist_strm_gen: {
-              auto_gen: "是否自动生成strm文件"
-            },
-            emby: {
-              try_match: "是否尝试自动匹配媒体",
-              media_id: "指定要刷新的媒体ID，留空则自动匹配，0表示不刷新"
-            }
-          };
-          return helpTexts[pluginName]?.[key] || '';
-        },
-
-        // 获取插件任务配置的占位符文本
-        getPluginTaskConfigPlaceholder(pluginName, key) {
-          const placeholders = {
-            aria2: {
-              auto_download: "",
-              pause: "",
-              auto_delete_quark_files: ""
-            },
-            alist_strm_gen: {
-              auto_gen: ""
-            },
-            emby: {
-              try_match: "",
-              media_id: "输入媒体 ID，留空则自动匹配，0 表示不刷新"
-            }
-          };
-          return placeholders[pluginName]?.[key] || '';
-        },
-
-        // 检查插件配置是否被禁用
-        isPluginConfigDisabled(task) {
-          for (const pluginName of ['aria2', 'alist_strm_gen', 'emby']) {
-            if (this.formData.plugin_config_mode[pluginName] === 'global') {
-              return true;
-            }
-          }
-          return false;
-        },
-
-        // 插件配置模式改变时的处理
-        onPluginConfigModeChange(pluginName) {
-          if (this.formData.plugin_config_mode[pluginName] === 'global') {
-            // 切换到全局模式时，初始化全局配置
-            if (!this.formData.global_plugin_config[pluginName]) {
-              this.formData.global_plugin_config[pluginName] = { ...this.getPluginTaskConfig(pluginName) };
-            }
-          }
-          
-          // 更新新任务的配置，应用全局配置
-          this.applyGlobalPluginConfig(this.newTask);
-          
-          // 更新影视发现页面创建任务的配置，应用全局配置
-          if (this.createTask && this.createTask.taskData) {
-            this.applyGlobalPluginConfig(this.createTask.taskData);
-          }
-        },
-
-        // 全局插件配置改变时的处理
-        onGlobalPluginConfigChange() {
-          // 更新新任务的配置，应用全局配置
-          this.applyGlobalPluginConfig(this.newTask);
-          
-          // 更新影视发现页面创建任务的配置，应用全局配置
-          if (this.createTask && this.createTask.taskData) {
-            this.applyGlobalPluginConfig(this.createTask.taskData);
-          }
-        },
-
-        // 应用全局插件配置到任务
         applyGlobalPluginConfig(task) {
           if (!task.addition) {
             task.addition = {};
           }
-          
-          for (const pluginName of ['aria2', 'alist_strm_gen', 'emby']) {
-            if (this.formData.plugin_config_mode[pluginName] === 'global') {
-              // 应用全局配置到任务
-              task.addition[pluginName] = { ...this.formData.global_plugin_config[pluginName] };
-            }
-          }
-        },
-
-
-
-        // 获取插件配置的悬停提示文本
-        getPluginConfigTitle(task) {
-          if (this.isPluginConfigDisabled(task)) {
-            return `单个任务的插件配置，具体键值由插件定义，当前有部分插件使用了全局配置模式，在该模式下对应的配置选项将被锁定，若要修改配置，请前往系统配置页面进行操作，查阅Wiki了解详情`;
-          }
-          return "单个任务的插件配置，具体键值由插件定义，查阅Wiki了解详情";
-        },
-
-        // 获取创建任务时的插件配置悬停提示文本
-        getCreateTaskPluginConfigTitle() {
-          if (this.isPluginConfigDisabled(this.createTask.taskData)) {
-            return `单个任务的插件配置，具体键值由插件定义，当前有部分插件使用了全局配置模式，在该模式下对应的配置选项将被锁定，若要修改配置，请前往系统配置页面进行操作，查阅Wiki了解详情`;
-          }
-          return "单个任务的插件配置，具体键值由插件定义，查阅Wiki了解详情";
+          task.addition = {};
         },
 
         // 获取Cookie状态悬停提示信息
@@ -9514,9 +9221,7 @@
                 if (!this.taskDirs.includes(parentDir))
                   this.taskDirs.push(parentDir);
               });
-              // 初始化新任务的插件配置，应用全局配置
-              this.newTask.addition = { ...config_data.task_plugins_config_default };
-              this.applyGlobalPluginConfig(this.newTask);
+              this.newTask.addition = {};
               // --- 新增：预加载追剧日历任务元数据，支持任务列表直接显示 season_counts / matched_status ---
               axios.get('/api/calendar/tasks')
                 .then(res => {
@@ -9560,18 +9265,7 @@
                   this.calendar.taskMapByName = {};
                   this.tasklist.contentTypes = [];
                 });
-              // 确保source配置存在
-              if (!config_data.source) {
-                config_data.source = {};
-              }
-              if (!config_data.source.cloudsaver) {
-                config_data.source.cloudsaver = {
-                  server: "",
-                  username: "",
-                  password: "",
-                  token: ""
-                };
-              }
+              this.ensureTelegramSourceConfig(config_data);
               // 确保剧集识别模式存在
               if (!config_data.episode_patterns) {
                 config_data.episode_patterns = [];
@@ -9643,8 +9337,6 @@
                 config_data.button_display = {
                   run_task: "always",
                   delete_task: "always",
-                  refresh_plex: "always",
-                  refresh_alist: "always",
                   season_counts: "always",
                   latest_update_date: "always",
                   task_progress: "always",
@@ -9677,8 +9369,6 @@
               // 确保显示顺序配置存在
               if (!config_data.button_display_order || !Array.isArray(config_data.button_display_order)) {
                 config_data.button_display_order = [
-                  "refresh_plex",
-                  "refresh_alist",
                   "run_task",
                   "delete_task",
                   "latest_transfer_file",
@@ -9689,6 +9379,8 @@
                   "today_update_indicator"
                 ];
               }
+              const allowedDisplayKeys = ['run_task', 'delete_task', 'latest_transfer_file', 'season_counts', 'latest_update_date', 'task_progress', 'show_status', 'today_update_indicator'];
+              config_data.button_display_order = config_data.button_display_order.filter(key => allowedDisplayKeys.includes(key));
               // 确保文件整理性能配置存在
               if (!config_data.file_performance) {
                 config_data.file_performance = {
@@ -9872,6 +9564,83 @@
               this.$set(configTarget.push_config, key, defaults[key]);
             }
           });
+        },
+        ensureTelegramSourceConfig(target) {
+          const configTarget = target || this.formData;
+          if (!configTarget.source || typeof configTarget.source !== 'object') {
+            this.$set(configTarget, 'source', {});
+          }
+          const defaults = {
+            enabled: true,
+            auto_replace: true,
+            proxy: '',
+            read_limit: 99,
+            deep_limit: 600,
+            verify_limit: 5,
+            timeout_seconds: 8,
+            cache_ttl_seconds: 900,
+            channels: ['https://t.me/mqte5', 'https://t.me/Quark_Movies'],
+            keywords: []
+          };
+          const current = configTarget.source.telegram && typeof configTarget.source.telegram === 'object'
+            ? configTarget.source.telegram
+            : {};
+          this.$set(configTarget.source, 'telegram', current);
+          Object.keys(defaults).forEach(key => {
+            if (current[key] === undefined || current[key] === null) {
+              this.$set(current, key, Array.isArray(defaults[key]) ? defaults[key].slice() : defaults[key]);
+            }
+          });
+          if (!Array.isArray(current.channels)) {
+            this.$set(current, 'channels', defaults.channels.slice());
+          }
+          if (!Array.isArray(current.keywords)) {
+            this.$set(current, 'keywords', []);
+          }
+          Object.keys(configTarget.source).forEach(key => {
+            if (key !== 'telegram') {
+              this.$delete(configTarget.source, key);
+            }
+          });
+          if (!configTarget.task_settings || typeof configTarget.task_settings !== 'object') {
+            this.$set(configTarget, 'task_settings', {});
+          }
+          this.$set(configTarget.task_settings, 'auto_replace_sources', ['telegram']);
+        },
+        addTelegramChannel() {
+          this.ensureTelegramSourceConfig();
+          this.formData.source.telegram.channels.push('');
+        },
+        removeTelegramChannel(index) {
+          this.ensureTelegramSourceConfig();
+          this.formData.source.telegram.channels.splice(index, 1);
+        },
+        addTelegramKeyword() {
+          this.ensureTelegramSourceConfig();
+          this.formData.source.telegram.keywords.push('');
+        },
+        removeTelegramKeyword(index) {
+          this.ensureTelegramSourceConfig();
+          this.formData.source.telegram.keywords.splice(index, 1);
+        },
+        indexTelegramSource(deep = false) {
+          this.ensureTelegramSourceConfig();
+          this.telegramIndexing = true;
+          axios.post('/api/source/telegram/index', {
+            deep,
+            telegram: this.formData.source.telegram
+          })
+            .then(response => {
+              const data = response.data || {};
+              const total = data.stats && data.stats.count !== undefined ? `，缓存 ${data.stats.count} 条` : '';
+              this.showToast(data.message || (data.success ? `索引完成${total}` : '索引失败'));
+            })
+            .catch(error => {
+              this.showToast('索引失败: ' + (error.response?.data?.message || error.message || '未知错误'));
+            })
+            .finally(() => {
+              this.telegramIndexing = false;
+            });
         },
         isTelegramEnabled() {
           const push = (this.formData && this.formData.push_config) || {};
@@ -11273,16 +11042,6 @@
             behavior: "smooth"
           });
         },
-        getAvailablePlugins(plugins) {
-          availablePlugins = {};
-          const pluginsFlagsArray = this.plugin_flags.split(',');
-          for (const pluginName in plugins) {
-            if (!pluginsFlagsArray.includes(`-${pluginName}`)) {
-              availablePlugins[pluginName] = plugins[pluginName];
-            }
-          }
-          return availablePlugins;
-        },
         toggleAllWeekdays(task) {
           if (task.runweek.length === 7) {
             task.runweek = [];
@@ -11401,7 +11160,7 @@
           const batchSize = 5;
           
           // 解析时间用于排序（降序：最新在前）
-          const getItemTs = (item) => this.parsePublishTs(item && item.publish_date, item && item.source, item && item.pansou_source);
+          const getItemTs = (item) => this.parsePublishTs(item && item.publish_date, item && item.telegram_source);
           
           // 处理单个链接的函数
           const processLink = (link) => {
@@ -11550,7 +11309,7 @@
           this.smart_param._hasShownInterimResults = false;
           
           // 结束前做一次排序，确保最终顺序正确
-          const getItemTs = (item) => this.parsePublishTs(item && item.publish_date, item && item.source, item && item.pansou_source);
+          const getItemTs = (item) => this.parsePublishTs(item && item.publish_date, item && item.telegram_source);
           validResults.sort((a, b) => getItemTs(b) - getItemTs(a));
           
           // 更新搜索结果
@@ -13135,9 +12894,6 @@
             document.activeElement.blur();
           }
         },
-        toggleCloudSaverPassword() {
-          this.showCloudSaverPassword = !this.showCloudSaverPassword;
-        },
         toggleWebuiPassword() {
           this.showWebuiPassword = !this.showWebuiPassword;
         },
@@ -14201,72 +13957,6 @@
             });
           }
         },
-        refreshPlexLibrary(index) {
-          axios.post('/refresh_plex_library', { task_index: index })
-            .then(response => {
-              if (response.data.success) {
-                this.showToast(response.data.message);
-              } else {
-                alert(response.data.message);
-              }
-            })
-            .catch(error => {
-              alert("刷新 Plex 媒体库失败: " + (error.response?.data?.message || error.message || "未知错误"));
-            });
-        },
-        refreshAlistDirectory(index) {
-          axios.post('/refresh_alist_directory', { task_index: index })
-            .then(response => {
-              if (response.data.success) {
-                this.showToast(response.data.message);
-              } else {
-                alert(response.data.message);
-              }
-            })
-            .catch(error => {
-              alert("刷新 AList 目录失败: " + (error.response?.data?.message || error.message || "未知错误"));
-            });
-        },
-        // 文件整理页面刷新Plex媒体库
-        refreshFileManagerPlexLibrary() {
-          // 获取当前目录路径
-          const currentPath = this.getCurrentFolderPath();
-
-          axios.post('/refresh_filemanager_plex_library', {
-            folder_path: currentPath,
-            account_index: this.fileManager.selectedAccountIndex
-          })
-            .then(response => {
-              if (response.data.success) {
-                this.showToast(response.data.message);
-              } else {
-                alert(response.data.message);
-              }
-            })
-            .catch(error => {
-              alert("刷新 Plex 媒体库失败: " + (error.response?.data?.message || error.message || "未知错误"));
-            });
-        },
-        // 文件整理页面刷新AList目录
-        refreshFileManagerAlistDirectory() {
-          // 获取当前目录路径
-          const currentPath = this.getCurrentFolderPath();
-
-          axios.post('/refresh_filemanager_alist_directory', {
-            folder_path: currentPath,
-            account_index: this.fileManager.selectedAccountIndex
-          })
-            .then(response => {
-              if (response.data.success) {
-                this.showToast(response.data.message);
-              } else {
-                alert(response.data.message);
-              }
-            })
-            .catch(error => {
-              alert("刷新 AList 目录失败: " + (error.response?.data?.message || error.message || "未知错误"));
-            });
-        },
         // 获取当前文件夹路径（相对于夸克网盘根目录）
         getCurrentFolderPath() {
           if (this.fileManager.currentFolder === 'root') {
@@ -14403,16 +14093,10 @@
           return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         },
         // 统一解析资源发布日期为时间戳
-        parsePublishTs(raw, source = null, pansouSource = null) {
+        parsePublishTs(raw, telegramSource = null) {
           if (!raw) return 0;
           const s = String(raw).trim();
-          
-          // 判断是否需要+8小时：
-          // 1. 如果是PanSou的tg来源，需要+8小时
-          // 2. 如果是CloudSaver来源，需要+8小时
-          // 3. 其他来源都不+8小时
-          const needAdd8Hours = (pansouSource && pansouSource.startsWith('tg:')) || 
-                               (source === 'CloudSaver');
+          const needAdd8Hours = telegramSource && telegramSource.startsWith('tg:');
           
           // YYYY-MM-DD HH:mm:ss
           let m = /^\s*(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\s*$/.exec(s);
@@ -14445,7 +14129,7 @@
           return ts;
         },
         // 规范化资源发布日期展示：将 ISO 格式（含 T/Z/偏移）转为 "YYYY-MM-DD HH:mm:ss"
-        formatPublishDate(value, pansouSource = null, source = null) {
+        formatPublishDate(value, telegramSource = null) {
           if (!value) return '';
           const s = String(value).trim();
           
@@ -14456,12 +14140,7 @@
           const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/.exec(s);
           if (m) {
             const [, y, mo, d, h, mi, se] = m;
-            // 判断是否需要+8小时：
-            // 1. 如果是PanSou的tg来源，需要+8小时
-            // 2. 如果是CloudSaver来源，需要+8小时
-            // 3. 其他来源都不+8小时
-            const needAdd8Hours = (pansouSource && pansouSource.startsWith('tg:')) || 
-                                 (source === 'CloudSaver');
+            const needAdd8Hours = telegramSource && telegramSource.startsWith('tg:');
             
             if (needAdd8Hours) {
               // 创建Date对象并加上8小时
@@ -14483,8 +14162,7 @@
           out = out.replace(/([+-]\d{2}:?\d{2})$/i, '');
           
           // 判断是否需要+8小时
-          const needAdd8Hours = (pansouSource && pansouSource.startsWith('tg:')) || 
-                               (source === 'CloudSaver');
+          const needAdd8Hours = telegramSource && telegramSource.startsWith('tg:');
           
           if (needAdd8Hours) {
             try {
@@ -16054,7 +15732,7 @@
               if (shouldSearchResources && this.hasAnyValidSearchSource() && this.createTask.taskData.taskname) {
                 this.searchSuggestions(-1, this.createTask.taskData.taskname);
               } else if (forceSearchResources && !this.hasAnyValidSearchSource()) {
-                this.showToast('请先配置 PanSou 或 CloudSaver 搜索来源');
+                this.showToast('请先配置 Telegram 搜索来源');
               }
             });
           } catch (error) {
@@ -16225,11 +15903,8 @@
         },
         hasAnyValidSearchSource() {
           const src = this.formData.source || {};
-          const cs = src.cloudsaver || {};
-          const ps = src.pansou || {};
-          const csValid = cs.server && cs.username && cs.password;
-          const psValid = ps.server;
-          return !!(csValid || psValid);
+          const tg = src.telegram || {};
+          return tg.enabled !== false && Array.isArray(tg.channels) && tg.channels.some(channel => String(channel || '').trim());
         },
         smartFillTaskData(item, movieData) {
           // 智能填充任务数据

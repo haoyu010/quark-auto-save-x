@@ -2197,7 +2197,6 @@ button.close:focus,
   color: var(--dark-text-color) !important; /* 悬停时链接颜色 */
 }
 
-/* "以下资源来自CloudSaver搜索"提示文本样式 */
 .task-suggestions .dropdown-item.text-muted:not(.text-center) {
   font-size: 14px !important; /* 与其他文本保持一致 */
   text-align: left !important; /* 左对齐 */
@@ -2209,7 +2208,6 @@ button.close:focus,
   color: var(--dark-text-color) !important; /* 悬停时链接颜色 */
 }
 
-/* "以下资源来自CloudSaver搜索"提示文本点击状态样式 */
 .task-suggestions .dropdown-item.text-muted:active {
   color: #fff !important; /* 点击时文本颜色变为白色 */
 }
@@ -2217,6 +2215,214 @@ button.close:focus,
 /* --------------- JSON编辑器样式 --------------- */
 table.jsoneditor-tree>tbody>tr.jsoneditor-expandable:first-child {
   display: none;
+}
+
+/* --------------- 搜索来源卡片 --------------- */
+.source-panel {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(245, 248, 255, 0.92));
+  border: 1px solid rgba(13, 83, 255, 0.14);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  margin-bottom: 8px;
+}
+
+.source-panel-head,
+.source-title,
+.source-actions,
+.source-list-head,
+.source-list-row {
+  display: flex;
+  align-items: center;
+}
+
+.source-panel-head {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.source-title {
+  min-width: 0;
+  gap: 10px;
+}
+
+.source-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, #0D53FF, #11A8FD);
+  box-shadow: 0 8px 18px rgba(13, 83, 255, 0.22);
+}
+
+.source-title h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dark-text-color);
+  line-height: 1.2;
+}
+
+.source-title span {
+  color: var(--light-text-color);
+  font-size: 0.8rem;
+}
+
+.source-actions {
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px !important;
+}
+
+.mini-switch input {
+  display: none;
+}
+
+.mini-switch span {
+  width: 42px;
+  height: 24px;
+  border-radius: 99px;
+  background: #d7dfed;
+  display: inline-block;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.mini-switch span::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+  transition: transform 0.18s ease;
+}
+
+.mini-switch input:checked + span {
+  background: #0D53FF;
+}
+
+.mini-switch input:checked + span::after {
+  transform: translateX(18px);
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1.6fr) repeat(5, minmax(82px, 0.6fr));
+  gap: 10px;
+}
+
+.source-field {
+  margin: 0;
+  min-width: 0;
+}
+
+.source-field span,
+.source-list-head span {
+  display: block;
+  color: var(--light-text-color);
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.source-field.compact input,
+.source-field.compact select {
+  text-align: center;
+}
+
+.source-list-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.source-list-card {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.source-list-head {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.source-list-head span {
+  margin: 0;
+}
+
+.source-list-row {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.source-list-row:last-child {
+  margin-bottom: 0;
+}
+
+.telegram-notify-panel {
+  padding: 12px !important;
+}
+
+.telegram-notify-panel .notify-panel-main {
+  gap: 12px;
+}
+
+.telegram-notify-panel .notify-channel-rail {
+  min-width: 180px;
+}
+
+.telegram-notify-panel .notify-channel-mark {
+  width: 34px;
+  height: 34px;
+}
+
+.telegram-notify-panel .notify-config-head {
+  margin-bottom: 10px;
+}
+
+.telegram-notify-panel .notify-config-head h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.telegram-notify-panel .telegram-form-grid {
+  gap: 8px;
+}
+
+.telegram-notify-panel .notify-actions {
+  margin-top: 10px;
+}
+
+@media (max-width: 991.98px) {
+  .source-grid,
+  .source-list-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .source-panel-head {
+    align-items: flex-start;
+  }
 }
 
 /* 自定义JSON编辑器样式 */
@@ -2632,8 +2838,6 @@ main .table th {
 .task .btn-outline-primary,
 .task .btn-outline-danger,
 .task .btn-warning,
-.task .btn-outline-plex,
-.task .btn-outline-alist,
 .row .btn-outline-primary {
   width: 32px;
   height: 32px;
@@ -4101,10 +4305,8 @@ input::-moz-list-button {
   display: none !important;
 }
 
-/* --------------- CloudSaver & WebUI 用户名和密码输入框样式 --------------- */
+/* --------------- WebUI 用户名和密码输入框样式 --------------- */
 /* 清除所有默认内边距和外边距 */
-.cloudsaver-username-col,
-.cloudsaver-password-col,
 .webui-username-col,
 .webui-password-col {
   padding: 0 !important;
@@ -4112,14 +4314,12 @@ input::-moz-list-button {
 }
 
 /* 用户名列专用样式：左侧添加页边距，右侧留间隔 */
-.cloudsaver-username-col,
 .webui-username-col {
   padding-left: 10px !important;
   padding-right: 4px !important;
 }
 
 /* 密码列专用样式：右侧添加页边距，左侧留间隔 */
-.cloudsaver-password-col,
 .webui-password-col {
   padding-left: 4px !important;
   padding-right: 10px !important;
@@ -4127,13 +4327,11 @@ input::-moz-list-button {
 
 /* 确保移动模式下也有相同的边距 */
 @media (max-width: 767.98px) {
-  .cloudsaver-username-col,
   .webui-username-col {
     padding-left: 15px !important;
     padding-right: 4px !important;
   }
 
-  .cloudsaver-password-col,
   .webui-password-col {
     padding-left: 4px !important;
     padding-right: 15px !important;
@@ -4655,54 +4853,6 @@ table.selectable-records .expand-button:hover {
   background-color: var(--button-gray-background-color);
 }
 
-/* Plex按钮样式 */
-.btn-outline-plex {
-  border-color: #EBAF00;
-  color: #EBAF00;
-}
-
-.btn-outline-plex:hover {
-  background-color: #EBAF00;
-  border-color: #EBAF00;
-  color: #fff;
-}
-
-.btn-outline-plex:hover .plex-icon {
-  filter: brightness(0) invert(1);
-}
-
-/* AList按钮样式 */
-.btn-outline-alist {
-  border-color: #70C6BE;
-  color: #70C6BE;
-}
-
-.btn-outline-alist:hover {
-  background-color: #70C6BE;
-  border-color: #70C6BE;
-  color: #fff;
-}
-
-.btn-outline-alist:hover .alist-icon {
-  filter: brightness(0) invert(1);
-}
-
-/* Plex图标样式 */
-.plex-icon {
-  width: 10.3px;
-  height: auto;
-  object-fit: contain;
-}
-
-/* AList图标样式 */
-.alist-icon {
-  width: 18px;
-  height: auto;
-  object-fit: contain;
-  position: relative;
-  top: -0.5px;
-}
-
 /* 任务按钮悬停显示样式 */
 .task-buttons .hover-only {
   opacity: 0;
@@ -4806,22 +4956,6 @@ table.selectable-records .expand-button:hover {
     display: inline-block !important;
   }
 
-  /* 确保移动端Plex和AList图标样式不受影响 */
-  .task-buttons .btn-outline-plex .plex-icon {
-    width: 10.3px;
-    height: auto;
-    object-fit: contain;
-    position: static;
-    top: auto;
-  }
-
-  .task-buttons .btn-outline-alist .alist-icon {
-    width: 18px;
-    height: auto;
-    object-fit: contain;
-    position: relative;
-    top: -0.5px;
-  }
 }
 
 /* 确保桌面端不受移动端优化影响 */
@@ -4837,22 +4971,6 @@ table.selectable-records .expand-button:hover {
     display: inline !important;
   }
 
-  /* 确保桌面端图标样式正常 */
-  .task-buttons .btn-outline-plex .plex-icon {
-    width: 10.3px;
-    height: auto;
-    object-fit: contain;
-    position: static;
-    top: auto;
-  }
-
-  .task-buttons .btn-outline-alist .alist-icon {
-    width: 18px;
-    height: auto;
-    object-fit: contain;
-    position: relative;
-    top: -0.5px;
-  }
 }
 
 /* 任务最近更新日期样式 */
@@ -5188,52 +5306,6 @@ select.task-filter-select,
   position: relative;
   top: 0px;
 }
-
-/* 确保文件整理页面的Plex和AList按钮样式与任务列表一致 */
-.batch-rename-btn.btn-outline-plex,
-.batch-rename-btn.btn-outline-alist {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px !important;
-}
-
-/* 文件整理页面Plex按钮样式 */
-.batch-rename-btn.btn-outline-plex {
-  border-color: #EBAF00 !important;
-  color: #EBAF00 !important;
-}
-
-.batch-rename-btn.btn-outline-plex:hover {
-  background-color: #EBAF00 !important;
-  border-color: #EBAF00 !important;
-  color: #fff !important;
-}
-
-.batch-rename-btn.btn-outline-plex:hover .plex-icon {
-  filter: brightness(0) invert(1);
-}
-
-/* 文件整理页面AList按钮样式 */
-.batch-rename-btn.btn-outline-alist {
-  border-color: #70C6BE !important;
-  color: #70C6BE !important;
-}
-
-.batch-rename-btn.btn-outline-alist:hover {
-  background-color: #70C6BE !important;
-  border-color: #70C6BE !important;
-  color: #fff !important;
-}
-
-.batch-rename-btn.btn-outline-alist:hover .alist-icon {
-  filter: brightness(0) invert(1);
-}
-
-
 
 /* 文件表格中的展开按钮 */
 .expand-button {
@@ -9473,78 +9545,6 @@ div:has(> .collapse:not(.show)):has(+ .row.title[title^="资源搜索"]) {
   top: 0.5px;
 }
 
-/* 任务列表Plex按钮图标样式 */
-.tasklist-plex-btn .plex-icon {
-  position: relative;
-  top: 0px;
-  opacity: 1 !important;
-  visibility: visible !important;
-  /* 使用与其他Plex按钮相同的尺寸设置 */
-  width: 7.2px;
-  height: auto;
-  object-fit: contain;
-  /* 移除可能导致加粗效果的阴影 */
-  text-shadow: none;
-  box-shadow: none;
-  /* 恢复简单的滤镜 */
-  filter: brightness(0) invert(1);
-  -webkit-filter: brightness(0) invert(1);
-}
-
-/* 任务列表AList按钮图标样式 */
-.tasklist-alist-btn .alist-icon {
-  position: relative;
-  top: -0.5px;
-  opacity: 1 !important;
-  visibility: visible !important;
-  /* 使用与其他AList按钮相同的尺寸设置 */
-  width: 12.6px;
-  height: auto;
-  object-fit: contain;
-  /* 移除可能导致加粗效果的阴影 */
-  text-shadow: none;
-  box-shadow: none;
-  /* 恢复简单的滤镜 */
-  filter: brightness(0) invert(1);
-  -webkit-filter: brightness(0) invert(1);
-}
-
-/* 海报视图Plex按钮悬停样式 */
-.tasklist-plex-btn:hover {
-  background-color: #EBAF00 !important;
-  border-color: #EBAF00 !important;
-  color: #fff !important;
-}
-
-.tasklist-plex-btn:hover .plex-icon {
-  filter: brightness(0) invert(1) !important;
-  -webkit-filter: brightness(0) invert(1) !important;
-}
-
-/* 海报视图AList按钮悬停样式 */
-.tasklist-alist-btn:hover {
-  background-color: #70C6BE !important;
-  border-color: #70C6BE !important;
-  color: #fff !important;
-}
-
-.tasklist-alist-btn:hover .alist-icon {
-  filter: brightness(0) invert(1) !important;
-  -webkit-filter: brightness(0) invert(1) !important;
-}
-
-/* 强制确保SVG图标在所有状态下都保持白色和可见 */
-.discovery-poster:hover .tasklist-plex-btn .plex-icon,
-.discovery-poster:hover .tasklist-alist-btn .alist-icon,
-.discovery-poster .tasklist-plex-btn .plex-icon,
-.discovery-poster .tasklist-alist-btn .alist-icon {
-  filter: brightness(0) invert(1) !important;
-  -webkit-filter: brightness(0) invert(1) !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  display: block !important;
-}
-
 /* 面包屑导航滚动条隐藏样式 */
 /* 文件整理页面面包屑导航滚动条隐藏 */
 .file-manager-breadcrumb::-webkit-scrollbar {
@@ -10314,9 +10314,7 @@ select.form-control,
 .task-buttons .btn,
 .task .btn-outline-primary,
 .task .btn-outline-danger,
-.task .btn-warning,
-.task .btn-outline-plex,
-.task .btn-outline-alist {
+.task .btn-warning {
   width: 36px;
   height: 36px;
 }
@@ -10942,9 +10940,7 @@ main > form {
 .task-buttons .btn,
 .task .btn-outline-primary,
 .task .btn-outline-danger,
-.task .btn-warning,
-.task .btn-outline-plex,
-.task .btn-outline-alist {
+.task .btn-warning {
   width: 42px;
   height: 42px;
   border-radius: 8px !important;

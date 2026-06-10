@@ -107,6 +107,15 @@ class ResourceAutoReplacerTest(unittest.TestCase):
 
         self.assertEqual(replacer.settings["search_timeout"], 6)
 
+    def test_defaults_to_telegram_source_only(self):
+        replacer = ResourceAutoReplacer(
+            {"auto_replace_invalid_shareurl": {"enabled": True}},
+            FakeAccount({}),
+            searchers=[],
+        )
+
+        self.assertEqual(replacer.settings["sources"], ["telegram"])
+
 
 if __name__ == "__main__":
     unittest.main()

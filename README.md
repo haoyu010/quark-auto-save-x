@@ -1,6 +1,6 @@
 # 夸克自动转存
 
-一个功能强大的夸克网盘自动转存工具，支持自动转存、智能命名、文件过滤、任务管理、资源搜索、影视发现、追剧日历、文件整理、自动签到、通知推送、媒体库局部刷新等功能，让追剧更轻松！
+一个功能强大的夸克网盘自动转存工具，支持自动转存、智能命名、文件过滤、任务管理、Telegram 频道资源搜索、影视发现、追剧日历、文件整理、自动签到、通知推送等功能，让追剧更轻松！
 
 ## 项目简介
 
@@ -16,9 +16,6 @@
 - 📁 **文件整理**：浏览和管理多个夸克账号的网盘文件，支持单项/批量重命名、云解压、移动、删除等操作
 - ✅ **自动签到**：每日自动签到领空间
 - 🔔 **通知推送**：支持多个通知推送渠道，及时了解转存状态
-- 🔌 **插件系统**：支持多种插件扩展功能，包括媒体库局部刷新、下载任务推送、strm 文件生成等
-
-配合 AList/OpenList、Rclone、CloudDrive、Emby、Plex 等工具，可以实现从转存到播放的完整自动化流程。
 
 ## 核心功能
 
@@ -28,7 +25,7 @@
 - 支持分享链接的子目录转存
 - 支持需提取码的分享链接
 - 支持定时运行和自动运行（根据节目播出时间智能执行任务，任务进度达到 100% 后自动跳过）
-- 智能搜索资源并自动填充（集成 CloudSaver、PanSou，支持自动过滤失效链接）
+- 智能搜索资源并自动填充（基于 Telegram 公共频道缓存，支持自动过滤失效链接）
 - 记录失效分享并跳过任务
 - 支持跳过已转存过的文件（即使删除网盘文件，也不会重复转存）
 - 支持自动解压压缩包（仅限夸克高级会员，支持保留目录结构或扁平化提取文件，支持保留或删除压缩包）
@@ -80,6 +77,7 @@
 - 根据任务名称自动搜索相关分享链接
 - 自动填充分享链接到任务配置
 - 自动过滤失效链接
+- 分享链接失效时，可使用 Telegram 频道缓存自动寻找替换链接
 - 支持跳转 Google、TMDB 和豆瓣搜索相关资源或信息
 
 ### 影视发现
@@ -103,16 +101,6 @@
 - 支持撤销重命名
 - 单项/批量云解压（仅限夸克高级会员）、移动文件、删除文件
 - 新建文件夹、删除文件夹
-
-### 插件系统
-
-- **AList**：自动局部刷新 AList 目录
-- **AList Strm**：配合 AList-Strm 项目，触发特定配置运行
-- **AList Strm Gen**：自动生成 strm 文件
-- **Aria2**：自动添加下载任务，支持转存后自动删除网盘文件
-- **Emby**：自动局部刷新 Emby 媒体库
-- **Plex**：自动局部刷新 Plex 媒体库
-- 支持自定义插件开发
 
 ### 转存记录
 
@@ -156,7 +144,6 @@ docker run -d \
   --name quark-auto-save-x \
   -p 5005:5005 \
   -v /自定义配置文件的存储目录/quark-auto-save-x/config:/app/config \
-  -v /自定义生成文件的存储目录:/media \  # 可选，插件 alist_strm_gen 生成 strm 使用
   --restart unless-stopped \
   x1ao4/quark-auto-save-x:latest
 ```
@@ -172,7 +159,6 @@ services:
       - 5005:5005
     volumes:
       - /自定义配置文件的存储目录/quark-auto-save-x/config:/app/config
-      - /自定义生成文件的存储目录:/media  # 可选，插件 alist_strm_gen 生成 strm 使用
     restart: unless-stopped
 ```
 
@@ -182,7 +168,6 @@ services:
 | ---------------- | ------------------------------------ |
 | `WEBUI_USERNAME` | WebUI 登录用户名（默认：admin）       |
 | `WEBUI_PASSWORD` | WebUI 登录密码（默认：admin）        |
-| `PLUGIN_FLAGS`   | 指定要禁用的插件，如 `-emby, -aria2, -alist_strm`（默认：全部启用） |
 | `PORT`           | 端口号（默认：5005）                 |
 | `DEBUG`          | 调试模式开关，`true` 或 `false`（默认：关闭）      |
 
@@ -202,25 +187,13 @@ services:
 4. 复制请求头中的 `Cookie` 值
 5. 粘贴到 WebUI 的「账号设置」中
 
-### 2. 配置插件和三方服务
-
-系统支持多种插件和三方服务，可根据需求选择配置：
-
-#### 插件（按需配置）
-
-支持的插件包括：
-
-* **AList**、**AList Strm**、**AList Strm Gen**、**Aria2**、**Emby**、**Plex**
-
-配置后，插件会自动执行对应功能（如刷新媒体库、添加下载任务或生成 strm 文件），无需手动干预。
-
-#### 三方服务（建议配置）
+### 2. 配置三方服务
 
 支持的三方服务包括：
 
 * **TMDB**：用于匹配电视节目元数据、获取海报、显示集数信息
 * **Trakt**：用于获取准确播出时间、追踪播出进度
-* **CloudSaver/PanSou**：用于智能搜索网盘资源并自动填充分享链接
+* **Telegram 频道搜索**：用于缓存公共频道中的夸克分享链接，支持资源搜索和失效链接自动换源
 
 配置后，相关功能会自动生效，无需额外操作。
 
@@ -318,12 +291,10 @@ services:
 - [命名规则](https://github.com/x1ao4/quark-auto-save-x/wiki/命名规则)
 - [定时规则](https://github.com/x1ao4/quark-auto-save-x/wiki/定时规则)
 - [任务设置](https://github.com/x1ao4/quark-auto-save-x/wiki/任务设置)
-- [插件设置](https://github.com/x1ao4/quark-auto-save-x/wiki/插件设置)
 - [通知设置](https://github.com/x1ao4/quark-auto-save-x/wiki/通知设置)
 - [性能设置](https://github.com/x1ao4/quark-auto-save-x/wiki/性能设置)
 - [显示设置](https://github.com/x1ao4/quark-auto-save-x/wiki/显示设置)
 - [资源搜索](https://github.com/x1ao4/quark-auto-save-x/wiki/资源搜索)
-- [插件开发](./plugins/README.md)
 
 ## 重要提示
 

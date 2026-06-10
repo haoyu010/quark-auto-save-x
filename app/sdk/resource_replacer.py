@@ -122,13 +122,13 @@ class ResourceAutoReplacer:
         if isinstance(raw, dict):
             enabled = self._as_enabled(raw.get("enabled", False))
             min_score = raw.get("min_score", task_settings.get("auto_replace_min_score", 85))
-            sources = raw.get("sources", ["pansou", "cloudsaver"])
+            sources = raw.get("sources", ["telegram"])
             quality_policy = raw.get("quality_policy", "no_downgrade")
             search_timeout = raw.get("timeout_seconds", task_settings.get("auto_replace_timeout_seconds", 8))
         else:
             enabled = self._as_enabled(raw)
             min_score = task_settings.get("auto_replace_min_score", 85)
-            sources = task_settings.get("auto_replace_sources", ["pansou", "cloudsaver"])
+            sources = task_settings.get("auto_replace_sources", ["telegram"])
             quality_policy = task_settings.get("auto_replace_quality_policy", "no_downgrade")
             search_timeout = task_settings.get("auto_replace_timeout_seconds", 8)
 
@@ -150,11 +150,16 @@ class ResourceAutoReplacer:
             search_timeout = 60
         if isinstance(sources, str):
             sources = [item.strip().lower() for item in sources.split(",") if item.strip()]
-        sources = [str(item).strip().lower() for item in (sources or []) if str(item).strip()]
+        allowed_sources = {"telegram"}
+        sources = [
+            str(item).strip().lower()
+            for item in (sources or [])
+            if str(item).strip().lower() in allowed_sources
+        ]
         return {
             "enabled": enabled,
             "min_score": min_score,
-            "sources": sources or ["pansou", "cloudsaver"],
+            "sources": sources or ["telegram"],
             "quality_policy": quality_policy or "no_downgrade",
             "search_timeout": search_timeout,
         }
@@ -164,48 +169,24 @@ class ResourceAutoReplacer:
         sources_cfg = self.config_data.get("source", {}) or {}
         enabled_sources = set(self.settings["sources"])
 
-        if "cloudsaver" in enabled_sources:
-            cs_data = sources_cfg.get("cloudsaver", {}) or {}
-            if cs_data.get("server") and cs_data.get("username") and cs_data.get("password"):
-                try:
-                    from .cloudsaver import CloudSaver
+        if "telegram" in enabled_sources:
+            tg_data = sources_cfg.get("telegram", {}) or {}
+            try:
+                from .telegram_channel import TelegramChannelCache
 
-                    cs = CloudSaver(cs_data.get("server"), timeout=self.settings["search_timeout"])
-                    cs.set_auth(
-                        cs_data.get("username", ""),
-                        cs_data.get("password", ""),
-                        cs_data.get("token", ""),
-                    )
+                tg_cfg = dict(tg_data)
+                tg_cfg.setdefault("timeout_seconds", self.settings["search_timeout"])
+                tg = TelegramChannelCache(tg_cfg)
+            except Exception as exc:
+                self.logger(f"Telegram 自动换源初始化失败: {exc}")
+                tg = None
 
-                    def cloudsaver_search(query, client=cs, cfg=cs_data):
-                        search = client.auto_login_search(query)
-                        if search.get("new_token"):
-                            cfg["token"] = search.get("new_token")
-                        if not search.get("success"):
-                            return []
-                        return client.clean_search_results(search.get("data") or [])
+            if tg is not None and getattr(tg, "enabled", False) and getattr(tg, "channels", []):
+                def telegram_search(query, client=tg):
+                    client.ensure_fresh()
+                    return client.search(query, limit=getattr(client, "verify_limit", 5))
 
-                    searchers.append(cloudsaver_search)
-                except Exception as exc:
-                    self.logger(f"CloudSaver 自动换源初始化失败: {exc}")
-
-        if "pansou" in enabled_sources:
-            ps_data = sources_cfg.get("pansou", {}) or {}
-            if ps_data.get("server"):
-                try:
-                    from .pansou import PanSou
-
-                    ps = PanSou(ps_data.get("server"), timeout=self.settings["search_timeout"])
-
-                    def pansou_search(query, client=ps):
-                        result = client.search(query)
-                        if result.get("success") and isinstance(result.get("data"), list):
-                            return result.get("data")
-                        return []
-
-                    searchers.append(pansou_search)
-                except Exception as exc:
-                    self.logger(f"PanSou 自动换源初始化失败: {exc}")
+                searchers.append(telegram_search)
 
         return searchers
 

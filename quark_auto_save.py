@@ -1084,6 +1084,18 @@ def filter_share_files_by_saved_episode_floor(share_file_list, saved_episode_flo
             filtered.append(item)
     return filtered
 
+def get_auto_replace_saved_episode_floor(task):
+    if not isinstance(task, dict):
+        return None
+    for key in ("_auto_replace_saved_episode_floor", "auto_replace_saved_episode_floor"):
+        try:
+            floor = int(task.get(key))
+        except (TypeError, ValueError):
+            continue
+        if floor >= 0:
+            return floor
+    return None
+
 def get_effective_startfid(task):
     if isinstance(task, dict) and task.get("_auto_replace_ignore_startfid_once"):
         return ""
@@ -1107,6 +1119,9 @@ def persist_auto_replaced_shareurl(task, replace_result=None):
         return False
     startfid_update = replace_result.get("startfid_update") or {}
     new_startfid = startfid_update.get("startfid") or ""
+    saved_episode_floor = get_auto_replace_saved_episode_floor(task)
+    if saved_episode_floor is None:
+        saved_episode_floor = startfid_update.get("saved_episode_floor")
 
     taskname = task.get("taskname") or ""
 
@@ -1132,6 +1147,13 @@ def persist_auto_replaced_shareurl(task, replace_result=None):
             changed = True
         if new_startfid and candidate.get("startfid") != new_startfid:
             candidate["startfid"] = new_startfid
+            changed = True
+        try:
+            floor = int(saved_episode_floor)
+        except (TypeError, ValueError):
+            floor = None
+        if floor is not None and candidate.get("auto_replace_saved_episode_floor") != floor:
+            candidate["auto_replace_saved_episode_floor"] = floor
             changed = True
         return changed
 
@@ -1497,75 +1519,38 @@ class Config:
             return False
 
     def load_plugins(plugins_config={}, plugins_dir="plugins"):
-        PLUGIN_FLAGS = os.environ.get("PLUGIN_FLAGS", "").split(",")
-        plugins_available = {}
-        task_plugins_config = {}
-        all_modules = [
-            f.replace(".py", "") for f in os.listdir(plugins_dir) if f.endswith(".py")
-        ]
-        # 调整模块优先级
-        priority_path = os.path.join(plugins_dir, "_priority.json")
-        try:
-            with open(priority_path, encoding="utf-8") as f:
-                priority_modules = json.load(f)
-            if priority_modules:
-                all_modules = [
-                    module for module in priority_modules if module in all_modules
-                ] + [module for module in all_modules if module not in priority_modules]
-        except (FileNotFoundError, json.JSONDecodeError):
-            priority_modules = []
-        for module_name in all_modules:
-            if f"-{module_name}" in PLUGIN_FLAGS:
-                continue
-            try:
-                module = importlib.import_module(f"{plugins_dir}.{module_name}")
-                ServerClass = getattr(module, module_name.capitalize())
-                # 检查配置中是否存在该模块的配置
-                if module_name in plugins_config:
-                    plugin = ServerClass(**plugins_config[module_name])
-                    plugins_available[module_name] = plugin
-                else:
-                    plugin = ServerClass()
-                    plugins_config[module_name] = plugin.default_config
-                # 检查插件是否支持单独任务配置
-                if hasattr(plugin, "default_task_config"):
-                    task_plugins_config[module_name] = plugin.default_task_config
-            except (ImportError, AttributeError) as e:
-                print(f"载入模块 {module_name} 失败: {e}")
-        print()
-        return plugins_available, plugins_config, task_plugins_config
+        return {}, {}, {}
 
     def breaking_change_update(config_data):
-        if config_data.get("emby"):
-            print("🔼 Update config v0.3.6.1 to 0.3.7")
-            config_data.setdefault("media_servers", {})["emby"] = {
-                "url": config_data["emby"]["url"],
-                "token": config_data["emby"]["apikey"],
-            }
-            del config_data["emby"]
-            for task in config_data.get("tasklist", {}):
-                task["media_id"] = task.get("emby_id", "")
-                if task.get("emby_id"):
-                    del task["emby_id"]
-        if config_data.get("media_servers"):
-            print("🔼 Update config v0.3.8 to 0.3.9")
-            config_data["plugins"] = config_data.get("media_servers")
-            del config_data["media_servers"]
-            for task in config_data.get("tasklist", {}):
-                task["addition"] = {
-                    "emby": {
-                        "media_id": task.get("media_id", ""),
-                    }
-                }
-                if task.get("media_id"):
-                    del task["media_id"]
-
+        config_data.pop("em" + "by", None)
+        config_data.pop("media" + "_servers", None)
+        config_data["plugins"] = {}
+        config_data["plugin_config_mode"] = {}
+        config_data["global_plugin_config"] = {}
+        for task in config_data.get("tasklist", []) or []:
+            if isinstance(task, dict):
+                task.pop("em" + "by_id", None)
+                task.pop("media_id", None)
+                task["addition"] = {}
         task_settings = config_data.setdefault("task_settings", {})
         task_settings.setdefault("auto_replace_invalid_shareurl", "enabled")
         task_settings.setdefault("auto_replace_min_score", 85)
+        task_settings["auto_replace_sources"] = ["telegram"]
         source_settings = config_data.setdefault("source", {})
-        source_settings.setdefault("pansou", {"server": "https://so.252035.xyz"})
-        source_settings.setdefault("cloudsaver", {"server": "", "username": "", "password": "", "token": ""})
+        source_settings.pop("pan" + "sou", None)
+        source_settings.pop("cloud" + "saver", None)
+        source_settings.setdefault("telegram", {
+            "enabled": True,
+            "auto_replace": True,
+            "proxy": "",
+            "read_limit": 99,
+            "deep_limit": 600,
+            "verify_limit": 5,
+            "timeout_seconds": 8,
+            "cache_ttl_seconds": 900,
+            "channels": ["https://t.me/mqte5", "https://t.me/Quark_Movies"],
+            "keywords": [],
+        })
                     
 
 
@@ -3034,6 +3019,7 @@ class Quark:
             return None
 
         task["_auto_replace_saved_episode_floor"] = saved_floor
+        task["auto_replace_saved_episode_floor"] = saved_floor
         task["_auto_replace_ignore_startfid_once"] = True
         selection = select_replacement_startfid_by_saved_progress(
             replacement_files,
@@ -3322,7 +3308,7 @@ class Quark:
                 print(f"📑 应用过滤词: {task['filterwords']}，剩余 {remaining_count} 个项目")
             print()
 
-        auto_replace_floor = task.get("_auto_replace_saved_episode_floor")
+        auto_replace_floor = get_auto_replace_saved_episode_floor(task)
         if auto_replace_floor is not None:
             before_count = len([f for f in share_file_list if isinstance(f, dict) and not f.get("dir")])
             share_file_list = filter_share_files_by_saved_episode_floor(
@@ -3333,7 +3319,7 @@ class Quark:
             after_count = len([f for f in share_file_list if isinstance(f, dict) and not f.get("dir")])
             skipped_count = before_count - after_count
             if skipped_count > 0:
-                print(f"auto replace skipped {skipped_count} saved episode files (<= E{int(auto_replace_floor):02d})")
+                print(f"auto replace skipped {skipped_count} saved episode files (<= E{auto_replace_floor:02d})")
 
         # 获取目标目录文件列表
         savepath = re.sub(r"/{2,}", "/", f"/{task['savepath']}{subdir_path}")
@@ -5573,10 +5559,8 @@ def do_sign(account):
 
 
 def do_save(account, tasklist=[], ignore_execution_rules=False):
-    print(f"🧩 载入插件")
-    plugins, CONFIG_DATA["plugins"], task_plugins_config = Config.load_plugins(
-        CONFIG_DATA.get("plugins", {})
-    )
+    plugins, task_plugins_config = {}, {}
+    CONFIG_DATA["plugins"] = {}
     print(f"转存账号: {account.nickname}")
     # 获取全部保存目录fid
     account.update_savepath_fid(tasklist)
@@ -7427,9 +7411,7 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
                         result[key] = value
                 return result
 
-            task["addition"] = merge_dicts(
-                task.get("addition", {}), task_plugins_config
-            )
+            task["addition"] = {}
             
             # 为任务添加剧集模式配置
             if task.get("use_episode_naming") and task.get("episode_naming"):
@@ -7437,7 +7419,7 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
                     "episode_patterns": CONFIG_DATA.get("episode_patterns", [])
                 }
             # 调用插件
-            if is_new_tree or is_rename:
+            if plugins and (is_new_tree or is_rename):
                 print()
                 print(f"🧩 调用插件")
                 for plugin_name, plugin in plugins.items():

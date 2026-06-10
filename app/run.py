@@ -19,11 +19,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
 from queue import Queue
 from collections import deque
-from sdk.cloudsaver import CloudSaver
-try:
-    from sdk.pansou import PanSou
-except Exception:
-    PanSou = None
+from sdk.telegram_channel import TelegramChannelCache
 from datetime import timedelta, datetime
 import subprocess
 import requests
@@ -1026,7 +1022,6 @@ def get_app_ver():
 PYTHON_PATH = "python3" if os.path.exists("/usr/bin/python3") else "python"
 SCRIPT_PATH = os.environ.get("SCRIPT_PATH", "./quark_auto_save.py")
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "./config/quark_config.json")
-PLUGIN_FLAGS = os.environ.get("PLUGIN_FLAGS", "")
 DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
 # 从环境变量获取端口，默认为5005
 PORT = int(os.environ.get("PORT", "5005"))
@@ -2152,9 +2147,7 @@ def logout():
 def index():
     if not is_login():
         return redirect(url_for("login"))
-    return render_template(
-        "index.html", version=app.config["APP_VERSION"], plugin_flags=PLUGIN_FLAGS
-    )
+    return render_template("index.html", version=app.config["APP_VERSION"])
 
 
 # 已移除图片代理逻辑（测试版不再需要跨域代理）
@@ -2200,48 +2193,15 @@ def get_data():
     else:
         data['trakt'].setdefault('client_id', '')
 
-    # 处理插件配置中的多账号支持字段，将数组格式转换为逗号分隔的字符串用于显示
-    if "plugins" in data:
-        # 处理Plex的quark_root_path
-        if "plex" in data["plugins"] and "quark_root_path" in data["plugins"]["plex"]:
-            data["plugins"]["plex"]["quark_root_path"] = format_array_config_for_display(
-                data["plugins"]["plex"]["quark_root_path"]
-            )
-
-        # 处理AList的storage_id
-        if "alist" in data["plugins"] and "storage_id" in data["plugins"]["alist"]:
-            data["plugins"]["alist"]["storage_id"] = format_array_config_for_display(
-                data["plugins"]["alist"]["storage_id"]
-            )
-
-    # 初始化插件配置模式（如果不存在）
-    if "plugin_config_mode" not in data:
-        data["plugin_config_mode"] = {
-            "aria2": "independent",
-            "alist_strm_gen": "independent",
-            "emby": "independent"
-        }
-    
-    # 初始化全局插件配置（如果不存在）
-    if "global_plugin_config" not in data:
-        data["global_plugin_config"] = {
-            "aria2": {
-                "auto_download": True,
-                "pause": False,
-                "auto_delete_quark_files": False
-            },
-            "alist_strm_gen": {
-                "auto_gen": True
-            },
-            "emby": {
-                "try_match": True,
-                "media_id": ""
-            }
-        }
-
     # 初始化推送通知类型配置（如果不存在）
     if "push_notify_type" not in data:
         data["push_notify_type"] = "full"
+    data["plugins"] = {}
+    data["plugin_config_mode"] = {}
+    data["global_plugin_config"] = {}
+    for task in data.get("tasklist", []) or []:
+        if isinstance(task, dict):
+            task["addition"] = {}
     ensure_push_config_defaults(data)
 
     # 初始化TMDB配置（如果不存在）
@@ -2251,14 +2211,25 @@ def get_data():
     # 初始化搜索来源默认结构
     if "source" not in data or not isinstance(data.get("source"), dict):
         data["source"] = {}
-    # CloudSaver 默认字段
-    data["source"].setdefault("cloudsaver", {"server": "", "username": "", "password": "", "token": ""})
-    # PanSou 默认字段
-    data["source"].setdefault("pansou", {"server": "https://so.252035.xyz"})
+    data["source"].pop("cloud" + "saver", None)
+    data["source"].pop("pan" + "sou", None)
+    data["source"].setdefault("telegram", {
+        "enabled": True,
+        "auto_replace": True,
+        "proxy": "",
+        "read_limit": 99,
+        "deep_limit": 600,
+        "verify_limit": 5,
+        "timeout_seconds": 8,
+        "cache_ttl_seconds": 900,
+        "channels": ["https://t.me/mqte5", "https://t.me/Quark_Movies"],
+        "keywords": [],
+    })
     # 失效链接自动换源默认字段
     data.setdefault("task_settings", {})
     data["task_settings"].setdefault("auto_replace_invalid_shareurl", "enabled")
     data["task_settings"].setdefault("auto_replace_min_score", 85)
+    data["task_settings"]["auto_replace_sources"] = ["telegram"]
 
     # 发送webui信息，但不发送密码原文
     data["webui"] = {
@@ -2271,72 +2242,15 @@ def get_data():
 
 
 def sync_task_plugins_config():
-    """同步更新所有任务的插件配置
-    
-    1. 检查每个任务的插件配置
-    2. 如果插件配置不存在，使用默认配置
-    3. 如果插件配置存在但缺少新的配置项，添加默认值
-    4. 保留原有的自定义配置
-    5. 只处理已启用的插件（通过PLUGIN_FLAGS检查）
-    6. 清理被禁用插件的配置
-    7. 应用全局插件配置（如果启用）
-    """
+    """清理已移除集成留下的任务级配置。"""
     global config_data, task_plugins_config_default
-    
-    # 如果没有任务列表，直接返回
-    if not config_data.get("tasklist"):
-        return
-        
-    # 获取禁用的插件列表
-    disabled_plugins = set()
-    if PLUGIN_FLAGS:
-        disabled_plugins = {name.lstrip('-') for name in PLUGIN_FLAGS.split(',')}
-    
-    # 获取插件配置模式
-    plugin_config_mode = config_data.get("plugin_config_mode", {})
-    global_plugin_config = config_data.get("global_plugin_config", {})
-        
-    # 遍历所有任务
-    for task in config_data["tasklist"]:
-        # 确保任务有addition字段
-        if "addition" not in task:
+    task_plugins_config_default = {}
+    config_data["plugins"] = {}
+    config_data["plugin_config_mode"] = {}
+    config_data["global_plugin_config"] = {}
+    for task in config_data.get("tasklist", []) or []:
+        if isinstance(task, dict):
             task["addition"] = {}
-            
-        # 清理被禁用插件的配置
-        for plugin_name in list(task["addition"].keys()):
-            if plugin_name in disabled_plugins:
-                del task["addition"][plugin_name]
-            
-        # 遍历所有插件的默认配置
-        for plugin_name, default_config in task_plugins_config_default.items():
-            # 跳过被禁用的插件
-            if plugin_name in disabled_plugins:
-                continue
-            
-            # 检查是否使用全局配置模式
-            if plugin_name in plugin_config_mode and plugin_config_mode[plugin_name] == "global":
-                # 使用全局配置
-                if plugin_name in global_plugin_config:
-                    task["addition"][plugin_name] = global_plugin_config[plugin_name].copy()
-                else:
-                    task["addition"][plugin_name] = default_config.copy()
-            else:
-                # 使用独立配置
-                if plugin_name not in task["addition"]:
-                    task["addition"][plugin_name] = default_config.copy()
-                else:
-                    # 如果任务中有该插件的配置，检查是否有新的配置项
-                    current_config = task["addition"][plugin_name]
-                    # 确保current_config是字典类型
-                    if not isinstance(current_config, dict):
-                        # 如果不是字典类型，使用默认配置
-                        task["addition"][plugin_name] = default_config.copy()
-                        continue
-                        
-                    # 遍历默认配置的每个键值对
-                    for key, default_value in default_config.items():
-                        if key not in current_config:
-                            current_config[key] = default_value
 
 
 def parse_comma_separated_config(value):
@@ -2404,6 +2318,29 @@ def test_telegram_notify():
     except Exception as e:
         return jsonify({"success": False, "message": f"Telegram 测试失败: {str(e)}"})
 
+
+@app.route("/api/source/telegram/index", methods=["POST"])
+def index_telegram_source():
+    if not is_login():
+        return jsonify({"success": False, "message": "未登录"})
+    payload = request.get_json(silent=True) or {}
+    source_cfg = payload.get("telegram")
+    if not isinstance(source_cfg, dict):
+        source_cfg = (config_data.get("source", {}) or {}).get("telegram", {})
+    try:
+        tg = TelegramChannelCache(source_cfg)
+        result = tg.index_channels(deep=bool(payload.get("deep")))
+        stats = tg.stats()
+        return jsonify({
+            "success": result.get("success", False),
+            "message": result.get("message", ""),
+            "indexed": result.get("indexed", 0),
+            "channels": result.get("channels", 0),
+            "stats": stats,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Telegram 索引失败: {str(e)}"})
+
 # 更新数据
 @app.route("/update", methods=["POST"])
 def update():
@@ -2441,19 +2378,8 @@ def update():
                 # 更新webui凭据
                 config_data["webui"]["username"] = value.get("username", config_data["webui"]["username"])
                 config_data["webui"]["password"] = value.get("password", config_data["webui"]["password"])
-            elif key == "plugins":
-                # 处理插件配置中的多账号支持字段
-                if "plex" in value and "quark_root_path" in value["plex"]:
-                    value["plex"]["quark_root_path"] = parse_comma_separated_config(
-                        value["plex"]["quark_root_path"]
-                    )
-
-                if "alist" in value and "storage_id" in value["alist"]:
-                    value["alist"]["storage_id"] = parse_comma_separated_config(
-                        value["alist"]["storage_id"]
-                    )
-
-                config_data.update({key: value})
+            elif key in {"plugins", "plugin_config_mode", "global_plugin_config", "media" + "_servers"}:
+                continue
             elif key == "tmdb_api_key":
                 # 更新TMDB API密钥
                 config_data[key] = value
@@ -2466,6 +2392,30 @@ def update():
                 config_data["trakt"] = trakt_cfg
             else:
                 config_data.update({key: value})
+    config_data["plugins"] = {}
+    config_data["plugin_config_mode"] = {}
+    config_data["global_plugin_config"] = {}
+    source_cfg = config_data.get("source") if isinstance(config_data.get("source"), dict) else {}
+    source_cfg.pop("cloud" + "saver", None)
+    source_cfg.pop("pan" + "sou", None)
+    source_cfg.setdefault("telegram", {
+        "enabled": True,
+        "auto_replace": True,
+        "proxy": "",
+        "read_limit": 99,
+        "deep_limit": 600,
+        "verify_limit": 5,
+        "timeout_seconds": 8,
+        "cache_ttl_seconds": 900,
+        "channels": ["https://t.me/mqte5", "https://t.me/Quark_Movies"],
+        "keywords": [],
+    })
+    config_data["source"] = {"telegram": source_cfg.get("telegram", {})}
+    config_data.setdefault("task_settings", {})
+    config_data["task_settings"]["auto_replace_sources"] = ["telegram"]
+    for task in config_data.get("tasklist", []) or []:
+        if isinstance(task, dict):
+            task["addition"] = {}
     
     # 同步更新任务的插件配置
     sync_task_plugins_config()
@@ -3162,205 +3112,6 @@ def ensure_calendar_info_for_tasks() -> bool:
     return changed
 
 
-# 刷新Plex媒体库
-@app.route("/refresh_plex_library", methods=["POST"])
-def refresh_plex_library():
-    if not is_login():
-        return jsonify({"success": False, "message": "未登录"})
-    
-    task_index = request.json.get("task_index")
-    if task_index is None:
-        return jsonify({"success": False, "message": "缺少任务索引"})
-        
-    # 获取任务信息
-    task = config_data["tasklist"][task_index]
-    if not task.get("savepath"):
-        return jsonify({"success": False, "message": "任务没有保存路径"})
-        
-    # 导入Plex插件
-    from plugins.plex import Plex
-    
-    # 初始化Plex插件
-    plex = Plex(**config_data["plugins"]["plex"])
-    if not plex.is_active:
-        return jsonify({"success": False, "message": "Plex 插件未正确配置"})
-        
-    # 执行刷新
-    plex.run(task)
-    
-    return jsonify({"success": True, "message": "成功刷新 Plex 媒体库"})
-
-
-# 刷新AList目录
-@app.route("/refresh_alist_directory", methods=["POST"])
-def refresh_alist_directory():
-    if not is_login():
-        return jsonify({"success": False, "message": "未登录"})
-    
-    task_index = request.json.get("task_index")
-    if task_index is None:
-        return jsonify({"success": False, "message": "缺少任务索引"})
-        
-    # 获取任务信息
-    task = config_data["tasklist"][task_index]
-    if not task.get("savepath"):
-        return jsonify({"success": False, "message": "任务没有保存路径"})
-        
-    # 导入AList插件
-    from plugins.alist import Alist
-    
-    # 初始化AList插件
-    alist = Alist(**config_data["plugins"]["alist"])
-    if not alist.is_active:
-        return jsonify({"success": False, "message": "AList 插件未正确配置"})
-        
-    # 执行刷新
-    alist.run(task)
-    
-    return jsonify({"success": True, "message": "成功刷新 AList 目录"})
-
-
-# 文件整理页面刷新Plex媒体库
-@app.route("/refresh_filemanager_plex_library", methods=["POST"])
-def refresh_filemanager_plex_library():
-    if not is_login():
-        return jsonify({"success": False, "message": "未登录"})
-
-    folder_path = request.json.get("folder_path")
-    account_index = request.json.get("account_index", 0)
-
-    if not folder_path:
-        return jsonify({"success": False, "message": "缺少文件夹路径"})
-
-    # 检查Plex插件配置
-    if not config_data.get("plugins", {}).get("plex", {}).get("url"):
-        return jsonify({"success": False, "message": "Plex 插件未配置"})
-
-    # 导入Plex插件
-    from plugins.plex import Plex
-
-    # 初始化Plex插件
-    plex = Plex(**config_data["plugins"]["plex"])
-    if not plex.is_active:
-        return jsonify({"success": False, "message": "Plex 插件未正确配置"})
-
-    # 获取夸克账号信息
-    try:
-        account = Quark(config_data["cookie"][account_index], account_index)
-        # 将配置中的云解压超时时间注入账号实例，供云解压/自动解压使用
-        try:
-            account.cloud_unarchive_timeout_seconds = get_cloud_unarchive_timeout_seconds()
-        except Exception:
-            pass
-
-        # 将文件夹路径转换为实际的保存路径
-        # folder_path是相对于夸克网盘根目录的路径
-        # quark_root_path是夸克网盘在本地文件系统中的挂载点
-        # 根据账号索引获取对应的夸克根路径
-        quark_root_path = plex.get_quark_root_path(account_index)
-        if not quark_root_path:
-            return jsonify({"success": False, "message": f"Plex 插件未配置账号 {account_index} 的夸克根路径"})
-
-        if folder_path == "" or folder_path == "/":
-            # 空字符串或根目录表示夸克网盘根目录
-            full_path = quark_root_path
-        else:
-            # 确保路径格式正确
-            if not folder_path.startswith("/"):
-                folder_path = "/" + folder_path
-
-            # 拼接完整路径：夸克根路径 + 相对路径
-            import os
-            full_path = os.path.normpath(os.path.join(quark_root_path, folder_path.lstrip("/"))).replace("\\", "/")
-
-        # 确保库信息已加载
-        if plex._libraries is None:
-            plex._libraries = plex._get_libraries()
-
-        # 执行刷新
-        success = plex.refresh(full_path)
-
-        if success:
-            return jsonify({"success": True, "message": "成功刷新 Plex 媒体库"})
-        else:
-            return jsonify({"success": False, "message": "刷新 Plex 媒体库失败，请检查路径配置"})
-
-    except Exception as e:
-        return jsonify({"success": False, "message": f"刷新 Plex 媒体库失败: {str(e)}"})
-
-
-# 文件整理页面刷新AList目录
-@app.route("/refresh_filemanager_alist_directory", methods=["POST"])
-def refresh_filemanager_alist_directory():
-    if not is_login():
-        return jsonify({"success": False, "message": "未登录"})
-
-    folder_path = request.json.get("folder_path")
-    account_index = request.json.get("account_index", 0)
-
-    if not folder_path:
-        return jsonify({"success": False, "message": "缺少文件夹路径"})
-
-    # 检查AList插件配置
-    if not config_data.get("plugins", {}).get("alist", {}).get("url"):
-        return jsonify({"success": False, "message": "AList 插件未配置"})
-
-    # 导入AList插件
-    from plugins.alist import Alist
-
-    # 初始化AList插件
-    alist = Alist(**config_data["plugins"]["alist"])
-    if not alist.is_active:
-        return jsonify({"success": False, "message": "AList 插件未正确配置"})
-
-    # 获取夸克账号信息
-    try:
-        account = Quark(config_data["cookie"][account_index], account_index)
-
-        # 将文件夹路径转换为实际的保存路径
-        # folder_path是相对于夸克网盘根目录的路径，如 "/" 或 "/测试/文件夹"
-        # 根据账号索引获取对应的存储配置
-        storage_mount_path, quark_root_dir = alist.get_storage_config(account_index)
-
-        if not storage_mount_path or not quark_root_dir:
-            return jsonify({"success": False, "message": f"AList 插件未配置账号 {account_index} 的存储信息"})
-
-        if folder_path == "/":
-            # 根目录，直接使用夸克根路径
-            full_path = quark_root_dir
-        else:
-            # 子目录，拼接路径
-            import os
-            # 移除folder_path开头的/，然后拼接
-            relative_path = folder_path.lstrip("/")
-            if quark_root_dir == "/":
-                full_path = "/" + relative_path
-            else:
-                full_path = os.path.normpath(os.path.join(quark_root_dir, relative_path)).replace("\\", "/")
-
-        # 检查路径是否在夸克根目录内
-        if quark_root_dir == "/" or full_path.startswith(quark_root_dir):
-            # 使用账号对应的存储配置映射到AList路径
-            # 构建AList路径
-            if quark_root_dir == "/":
-                relative_path = full_path.lstrip("/")
-            else:
-                relative_path = full_path.replace(quark_root_dir, "", 1).lstrip("/")
-
-            alist_path = os.path.normpath(
-                os.path.join(storage_mount_path, relative_path)
-            ).replace("\\", "/")
-
-            # 执行刷新
-            alist.refresh(alist_path)
-            return jsonify({"success": True, "message": "成功刷新 AList 目录"})
-        else:
-            return jsonify({"success": False, "message": "路径不在AList配置的夸克根目录内"})
-
-    except Exception as e:
-        return jsonify({"success": False, "message": f"刷新 AList 目录失败: {str(e)}"})
-
-
 @app.route("/task_suggestions")
 def get_task_suggestions():
     if not is_login():
@@ -3403,58 +3154,22 @@ def get_task_suggestions():
     
     try:
         sources_cfg = config_data.get("source", {}) or {}
-        cs_data = sources_cfg.get("cloudsaver", {})
-        ps_data = sources_cfg.get("pansou", {})
+        tg_data = sources_cfg.get("telegram", {}) or {}
 
         merged = []
         providers = []
 
-        # CloudSaver
-        if (
-            cs_data.get("server")
-            and cs_data.get("username")
-            and cs_data.get("password")
-        ):
-            cs = CloudSaver(cs_data.get("server"))
-            cs.set_auth(
-                cs_data.get("username", ""),
-                cs_data.get("password", ""),
-                cs_data.get("token", ""),
-            )
-            search = cs.auto_login_search(search_query)
-            if search.get("success"):
-                if search.get("new_token"):
-                    cs_data["token"] = search.get("new_token")
-                    Config.write_json(CONFIG_PATH, config_data)
-                search_results = cs.clean_search_results(search.get("data"))
-                if isinstance(search_results, list):
-                    # 为 CloudSaver 结果补齐来源字段
-                    for it in search_results:
-                        try:
-                            if not it.get("source"):
-                                it["source"] = "CloudSaver"
-                        except Exception:
-                            pass
-                    merged.extend(search_results)
-                    providers.append("CloudSaver")
-
-        # PanSou
-        if ps_data and ps_data.get("server") and PanSou is not None:
-            try:
-                ps = PanSou(ps_data.get("server"))
-                result = ps.search(search_query)
-                if result.get("success") and isinstance(result.get("data"), list):
-                    # 为 PanSou 结果补齐来源字段
-                    for it in result.get("data"):
-                        try:
-                            if not it.get("source"):
-                                it["source"] = "PanSou"
-                        except Exception:
-                            pass
-                    merged.extend(result.get("data"))
-                    providers.append("PanSou")
-            except Exception as e:
-                logging.warning(f"PanSou 搜索失败: {str(e)}")
+        try:
+            tg = TelegramChannelCache(tg_data)
+            if tg.enabled:
+                if deep in ["1", "true", "yes"]:
+                    tg.index_channels(deep=True)
+                else:
+                    tg.ensure_fresh()
+                merged.extend(tg.search(search_query))
+                providers.append("Telegram")
+        except Exception as e:
+            logging.warning(f"Telegram 搜索失败: {str(e)}")
 
         # 去重并统一时间字段为 publish_date
         # 规则：
@@ -3605,7 +3320,7 @@ def get_task_suggestions():
                         final_map[key] = item_copy
                     elif current_ts == existed_ts:
                         # 时间完全相同，使用确定性优先级打破平手
-                        source_priority = {"CloudSaver": 2, "PanSou": 1}
+                        source_priority = {"Telegram": 3}
                         existed_pri = source_priority.get((existed.get("source") or "").strip(), 0)
                         current_pri = source_priority.get(src, 0)
                         # 无论谁胜出，都要合并来源集合
@@ -4574,51 +4289,18 @@ def init():
         config_data["trakt"].setdefault("client_id", "")
 
     # 初始化插件配置
-    _, plugins_config_default, task_plugins_config_default = Config.load_plugins()
-    plugins_config_default.update(config_data.get("plugins", {}))
-    config_data["plugins"] = plugins_config_default
-    
-    # 获取禁用的插件列表
-    disabled_plugins = set()
-    if PLUGIN_FLAGS:
-        disabled_plugins = {name.lstrip('-') for name in PLUGIN_FLAGS.split(',')}
-    
-    # 清理所有任务中被禁用插件的配置
-    if config_data.get("tasklist"):
-        for task in config_data["tasklist"]:
-            if "addition" in task:
-                for plugin_name in list(task["addition"].keys()):
-                    if plugin_name in disabled_plugins:
-                        del task["addition"][plugin_name]
-    
-    # 初始化插件配置模式（如果不存在）
-    if "plugin_config_mode" not in config_data:
-        config_data["plugin_config_mode"] = {
-            "aria2": "independent",
-            "alist_strm_gen": "independent",
-            "emby": "independent"
-        }
-    
-    # 初始化全局插件配置（如果不存在）
-    if "global_plugin_config" not in config_data:
-        config_data["global_plugin_config"] = {
-            "aria2": {
-                "auto_download": True,
-                "pause": False,
-                "auto_delete_quark_files": False
-            },
-            "alist_strm_gen": {
-                "auto_gen": True
-            },
-            "emby": {
-                "try_match": True,
-                "media_id": ""
-            }
-        }
+    task_plugins_config_default = {}
+    config_data["plugins"] = {}
 
     # 初始化推送通知类型配置（如果不存在）
     if "push_notify_type" not in config_data:
         config_data["push_notify_type"] = "full"
+    config_data["plugins"] = {}
+    config_data["plugin_config_mode"] = {}
+    config_data["global_plugin_config"] = {}
+    for task in config_data.get("tasklist", []) or []:
+        if isinstance(task, dict):
+            task["addition"] = {}
     ensure_push_config_defaults(config_data)
 
     # 同步更新任务的插件配置
