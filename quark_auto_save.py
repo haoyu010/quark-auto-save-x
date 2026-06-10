@@ -1084,6 +1084,158 @@ def filter_share_files_by_saved_episode_floor(share_file_list, saved_episode_flo
             filtered.append(item)
     return filtered
 
+def _positive_int(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+def rewrite_episode_naming_season(episode_naming, season_number):
+    season = _positive_int(season_number)
+    if not season:
+        return episode_naming
+    naming = str(episode_naming or "")
+    return re.sub(
+        r"[Ss]\d{1,3}[Ee](?=\[\])",
+        f"S{season:02d}E",
+        naming,
+        count=1,
+    )
+
+def get_task_tmdb_season_number(task):
+    if not isinstance(task, dict):
+        return None
+
+    direct_keys = (
+        "matched_latest_season_number",
+        "latest_season_number",
+        "season_number",
+    )
+    for key in direct_keys:
+        season = _positive_int(task.get(key))
+        if season:
+            return season
+
+    calendar_info = task.get("calendar_info") or {}
+    if isinstance(calendar_info, dict):
+        match = calendar_info.get("match") or {}
+        for source in (match, calendar_info):
+            if not isinstance(source, dict):
+                continue
+            for key in ("latest_season_number", "season_number", "matched_latest_season_number"):
+                season = _positive_int(source.get(key))
+                if season:
+                    return season
+    return None
+
+def _extract_tmdb_search_year(*values):
+    for value in values:
+        match = re.search(r"(?:19|20)\d{2}", str(value or ""))
+        if match:
+            return match.group(0)
+    return None
+
+def _clean_tmdb_search_title(task):
+    if not isinstance(task, dict):
+        return ""
+    raw = task.get("taskname") or task.get("matched_show_name") or task.get("savepath") or ""
+    title = os.path.basename(str(raw).replace("\\", "/").rstrip("/"))
+    title = re.sub(r"\((?:19|20)\d{2}\)|（(?:19|20)\d{2}）", " ", title)
+    title = re.sub(r"[\s._-]+[Ss]\d{1,3}(?:[Ee]\d{1,4})?\b.*$", " ", title)
+    title = re.sub(r"\s+", " ", title).strip(" -_.")
+    return title
+
+def _select_latest_tmdb_season(details):
+    if not isinstance(details, dict):
+        return None
+
+    last_episode = details.get("last_episode_to_air") or {}
+    season = _positive_int(last_episode.get("season_number"))
+    if season:
+        return season
+
+    seasons = []
+    today = datetime.now().date()
+    for item in details.get("seasons") or []:
+        season_number = _positive_int(item.get("season_number"))
+        if not season_number:
+            continue
+        air_date = item.get("air_date") or ""
+        aired = True
+        if air_date:
+            try:
+                aired = datetime.strptime(air_date, "%Y-%m-%d").date() <= today
+            except ValueError:
+                aired = True
+        if aired:
+            seasons.append(season_number)
+    return max(seasons) if seasons else _positive_int(details.get("number_of_seasons"))
+
+def infer_tmdb_season_number_for_task(task, config_data=None):
+    config_data = config_data or CONFIG_DATA
+    api_key = str((config_data or {}).get("tmdb_api_key") or "").strip()
+    if not api_key:
+        return None
+
+    title = _clean_tmdb_search_title(task)
+    if not title:
+        return None
+
+    try:
+        from app.sdk.tmdb_service import TMDBService
+    except ImportError:
+        try:
+            from sdk.tmdb_service import TMDBService
+        except ImportError:
+            return None
+
+    try:
+        service = TMDBService(
+            api_key,
+            (config_data or {}).get("poster_language", "zh-CN"),
+            request_timeout=float((config_data or {}).get("tmdb_auto_season_timeout", 2.5)),
+            max_retries=1,
+        )
+        year = _extract_tmdb_search_year(task.get("taskname"), task.get("savepath"))
+        match = service.search_tv_show(title, year=year)
+        if not match:
+            return None
+        details = service.get_tv_show_details(match.get("id"))
+        return _select_latest_tmdb_season(details)
+    except Exception as e:
+        print(f"TMDB auto season lookup failed: {e}")
+        return None
+
+def resolve_episode_naming_with_tmdb_season(task, config_data=None, season_resolver=None):
+    if not isinstance(task, dict):
+        return ""
+    episode_naming = task.get("episode_naming") or ""
+    if not re.search(r"[Ss]\d{1,3}[Ee](?=\[\])", episode_naming):
+        return episode_naming
+
+    season = get_task_tmdb_season_number(task)
+    if not season:
+        resolver = season_resolver or infer_tmdb_season_number_for_task
+        season = resolver(task, config_data or CONFIG_DATA)
+    return rewrite_episode_naming_season(episode_naming, season)
+
+def apply_tmdb_season_to_episode_naming(task, config_data=None, season_resolver=None):
+    if not isinstance(task, dict) or not task.get("use_episode_naming"):
+        return task.get("episode_naming") if isinstance(task, dict) else ""
+    original = task.get("episode_naming") or ""
+    resolved = resolve_episode_naming_with_tmdb_season(
+        task,
+        config_data or CONFIG_DATA,
+        season_resolver=season_resolver,
+    )
+    if resolved and resolved != original:
+        task["episode_naming"] = resolved
+        if task.get("pattern") == original:
+            task["pattern"] = resolved
+        print(f"TMDB 自动季号: {task.get('taskname', '')} -> {resolved}")
+    return resolved
+
 def get_auto_replace_saved_episode_floor(task):
     if not isinstance(task, dict):
         return None
@@ -3183,6 +3335,7 @@ class Quark:
         elif task.get("use_episode_naming") and task.get("episode_naming"):
             # 剧集命名模式下已经在do_save中打印了剧集命名信息，这里不再重复打印
             # 构建剧集命名的正则表达式
+            apply_tmdb_season_to_episode_naming(task, CONFIG_DATA)
             episode_pattern = task["episode_naming"]
             # 先检查是否包含合法的[]字符
             if "[]" in episode_pattern:
@@ -4356,6 +4509,9 @@ class Quark:
         return tree
 
     def do_rename_task(self, task, subdir_path=""):
+        if task.get("use_episode_naming") and task.get("episode_naming"):
+            apply_tmdb_season_to_episode_naming(task, CONFIG_DATA)
+
         # 检查是否为顺序命名模式
         if task.get("use_sequence_naming") and task.get("sequence_naming"):
             # 使用顺序命名模式
