@@ -17,6 +17,18 @@ SEASON_RE = re.compile(
     r"(?:[Ss](\d{1,2})(?!\d)|Season\s*(\d{1,2})|第\s*([0-9一二三四五六七八九十零〇两]+)\s*季|(\d{1,2})\s*季)",
     re.I,
 )
+RELEASE_BRACKET_TAG_RE = re.compile(
+    r"[\[【(（]\s*[^]】)）]*(?:原盘|字幕|中字|国语|粤语|国粤|双语|多音轨|内封|外挂|高清|蓝光|修复|合集|完结|REMUX|BluRay|WEB|4K|1080|2160|720)[^]】)）]*[\]】)）]",
+    re.I,
+)
+RELEASE_METADATA_START_RE = re.compile(
+    r"(?:"
+    r"[Ss]\d{1,2}[Ee]\d{1,4}|Season\s*\d{1,2}|第\s*[0-9一二三四五六七八九十零〇两]+\s*季|(?<![A-Za-z0-9])(?:EP|E)[\s._-]*\d{1,4}(?![A-Za-z0-9])|(?:第\s*)?[0-9一二三四五六七八九十零〇两]+\s*[集话話期]|"
+    r"\b(?:4K|8K|2160p|1080p|720p|REMUX|WEB[- ]?DL|BluRay|BDRip|HDRip|HDTV|H\.?264|H\.?265|x265|x264|AAC|DTS|DDP?\d?\.?\d?|Atmos|HDR|DV|HQ|HiveWeb|(?:8|10|12)[- ]?bit|\d{2,3}\s*FPS)\b|"
+    r"\d{2,3}\s*帧|原盘|字幕|中字|外挂字幕|内封字幕|国语|粤语|国粤|双语|多音轨|简繁|高码率|高码|高帧率"
+    r")",
+    re.I,
+)
 
 MEDIA_TASK_DEFAULTS = {
     "telegram_inbox_media_root": "",
@@ -116,11 +128,21 @@ def _strip_extension(name: str) -> str:
     return re.sub(r"\.(mkv|mp4|avi|mov|ts|m2ts|wmv|flv|webm|rmvb|srt|ass|ssa|zip|rar|7z)$", "", str(name or ""), flags=re.I).strip()
 
 
+def _drop_release_metadata_tail(text: str) -> str:
+    for match in RELEASE_METADATA_START_RE.finditer(text or ""):
+        head = str(text or "")[: match.start()].strip(" -_|:：，,。.【[(")
+        if head:
+            return head
+    return text
+
+
 def _clean_media_title(value: str) -> str:
     text = _strip_extension(value)
     text = re.sub(r"[\._]+", " ", text)
     text = re.sub(r"^(?:资源|片名|剧名|名称|标题)\s*[:：]\s*", " ", text)
+    text = RELEASE_BRACKET_TAG_RE.sub(" ", text)
     text = re.sub(r"[\(（【\[]\s*(?:19|20)\d{2}\s*[\)）】\]]", " ", text)
+    text = _drop_release_metadata_tail(text)
     text = re.sub(r"(?:首更|更至|更新至|更新|已更|连载至|全)\s*(?:第\s*)?(?:EP|E)?[\s._-]*\d+\s*(?:集|话|話|期|回)?", " ", text, flags=re.I)
     text = re.sub(r"\[[^\]]+\]|\([^)]*(?:1080|2160|720|字幕|国语|中字|GB|MP4|MKV)[^)]*\)", " ", text, flags=re.I)
     text = re.sub(r"\b(4K|8K|2160p|1080p|720p|WEB[- ]?DL|BluRay|H\.?264|H\.?265|x265|x264|AAC|DDP?\d?\.?\d?|HDR|DV|HQ|(?:8|10|12)[- ]?bit|\d{2,3}\s*FPS)\b|\d{2,3}\s*帧|高码率|高码|高帧率", " ", text, flags=re.I)

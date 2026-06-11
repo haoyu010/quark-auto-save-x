@@ -409,6 +409,74 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
                 self.assertEqual(_clean_media_title(raw), expected)
                 self.assertTrue(_looks_like_series(raw, [{"file_name": f"{raw}.mkv", "dir": False}]))
 
+    def test_release_metadata_does_not_pollute_media_title(self):
+        cases = {
+            "名称：【原盘】赌侠 (1990) 1080P REMUX 国粤多音轨 中字外挂字幕": "赌侠",
+            "名称：沧月星澜(2026)4K S01E01 - E18 HiveWeb": "沧月星澜",
+            "名称：她战(2026)4K S01E01 - E16 HiveWeb": "她战",
+        }
+
+        for raw, expected in cases.items():
+            with self.subTest(raw=raw):
+                seed = extract_title_seed(raw)
+                self.assertEqual(_clean_media_title(seed), expected)
+
+    def test_release_metadata_samples_build_expected_library_tasks(self):
+        account = FakeAccount({
+            "du": [{"file_name": "赌侠.1990.1080P.REMUX.mkv", "dir": False, "fid": "f1"}],
+            "cang": [{"file_name": "沧月星澜.S01E01.mkv", "dir": False, "fid": "f2"}],
+            "tazhan": [{"file_name": "她战.S01E01.mkv", "dir": False, "fid": "f3"}],
+        })
+
+        movie_task = build_media_task_from_share(
+            "https://pan.quark.cn/s/du",
+            "名称：【原盘】赌侠 (1990) 1080P REMUX 国粤多音轨 中字外挂字幕",
+            account,
+            {"task_settings": {"telegram_inbox_media_root": "影视库"}},
+            FakeTMDB(movie={"id": 624, "title": "赌侠", "release_date": "1990-12-13"}),
+        )
+        self.assertEqual(movie_task["taskname"], "赌侠")
+        self.assertEqual(movie_task["content_type"], "movie")
+        self.assertEqual(movie_task["savepath"], "影视库/电影/赌侠 (1990)")
+
+        cang_task = build_media_task_from_share(
+            "https://pan.quark.cn/s/cang",
+            "名称：沧月星澜(2026)4K S01E01 - E18 HiveWeb",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                }
+            },
+            FakeTMDB(
+                tv={"id": 1001, "name": "沧月星澜", "first_air_date": "2026-01-01"},
+                details={"id": 1001, "name": "沧月星澜", "first_air_date": "2026-01-01", "last_episode_to_air": {"season_number": 1}},
+            ),
+        )
+        self.assertEqual(cang_task["taskname"], "沧月星澜")
+        self.assertEqual(cang_task["content_type"], "tv")
+        self.assertEqual(cang_task["savepath"], "影视库/电视剧/沧月星澜/Season 01")
+
+        tazhan_task = build_media_task_from_share(
+            "https://pan.quark.cn/s/tazhan",
+            "名称：她战(2026)4K S01E01 - E16 HiveWeb",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                }
+            },
+            FakeTMDB(
+                tv={"id": 1002, "name": "她战", "first_air_date": "2026-01-01"},
+                details={"id": 1002, "name": "她战", "first_air_date": "2026-01-01", "last_episode_to_air": {"season_number": 1}},
+            ),
+        )
+        self.assertEqual(tazhan_task["taskname"], "她战")
+        self.assertEqual(tazhan_task["content_type"], "tv")
+        self.assertEqual(tazhan_task["savepath"], "影视库/电视剧/她战/Season 01")
+
     def test_service_skips_duplicate_share_and_does_not_run(self):
         account = FakeAccount({"dup": [{"file_name": "阿基拉.mkv", "dir": False, "fid": "f1"}]})
         config = {
