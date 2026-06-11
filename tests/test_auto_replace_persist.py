@@ -1,8 +1,10 @@
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
 import quark_auto_save
+from app.sdk.db import RecordDB
 
 
 class AutoReplaceFloorQuark(quark_auto_save.Quark):
@@ -202,6 +204,46 @@ class AutoReplacePersistTest(unittest.TestCase):
             account.dir_check_and_save(task, "pwd", "stoken")
 
         self.assertEqual(account.saved_fids, ["fid-e50", "fid-e49", "fid-e48"])
+
+    def test_auto_replace_progress_falls_back_to_same_task_records_when_savepath_changed(self):
+        replacement_files = [
+            {
+                "file_name": f"Show - S01E{episode:02d}.mkv",
+                "fid": f"fid-e{episode:02d}",
+                "share_fid_token": f"token-e{episode:02d}",
+                "dir": False,
+                "obj_category": "video",
+                "size": 1000 + episode,
+                "updated_at": 100 + episode,
+            }
+            for episode in range(1, 14)
+        ]
+        account = AutoReplaceFloorQuark(replacement_files)
+        account.savepath_fid = {"Anime/Show - S07": "target"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "data.db")
+            db = RecordDB(db_path)
+            db.add_record(
+                task_name="Show",
+                original_name="Show - S01E12.mkv",
+                renamed_to="Show - S01E12.mkv",
+                file_size=1012,
+                modify_date=100,
+                file_id="old-fid-e12",
+                save_path="Anime/Show - S01",
+            )
+            db.close()
+
+            with patch.object(quark_auto_save, "RecordDB", lambda: RecordDB(db_path)):
+                task = {"taskname": "Show", "savepath": "Anime/Show - S07"}
+                selection = account.prepare_auto_replace_startfid(
+                    task,
+                    {"best": {"files": replacement_files}},
+                )
+
+        self.assertEqual(selection["startfid"], "fid-e13")
+        self.assertEqual(task["auto_replace_saved_episode_floor"], 12)
 
 
 if __name__ == "__main__":

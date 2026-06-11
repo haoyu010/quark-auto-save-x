@@ -3102,29 +3102,41 @@ class Quark:
             if not getattr(db, "conn", None):
                 return []
 
+            taskname = task.get("taskname") if isinstance(task, dict) else ""
+            savepath = _normalize_task_savepath(task)
+            variants = _savepath_variants(savepath)
+
+            def fetch_records(where, params):
+                where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+                cursor = db.conn.cursor()
+                cursor.execute(
+                    "SELECT original_name, renamed_to, modify_date, file_id, save_path "
+                    f"FROM transfer_records {where_sql}",
+                    params,
+                )
+                columns = [column[0] for column in cursor.description]
+                return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
             where = []
             params = []
-            taskname = task.get("taskname") if isinstance(task, dict) else ""
             if taskname:
                 where.append("task_name = ?")
                 params.append(taskname)
 
-            savepath = _normalize_task_savepath(task)
-            variants = _savepath_variants(savepath)
             if variants:
                 placeholders = ",".join(["?" for _ in variants])
                 where.append(f"save_path IN ({placeholders})")
                 params.extend(variants)
 
-            where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-            cursor = db.conn.cursor()
-            cursor.execute(
-                "SELECT original_name, renamed_to, modify_date, file_id, save_path "
-                f"FROM transfer_records {where_sql}",
-                params,
-            )
-            columns = [column[0] for column in cursor.description]
-            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            records = fetch_records(where, params)
+            if records or not (taskname and variants):
+                return records
+
+            # If TMDB season/path changed (for example S01 -> S07), the target
+            # folder can be empty even though the task already has progress.
+            # Fall back to same-task records so auto-replace does not resave
+            # old episodes from a replacement share.
+            return fetch_records(["task_name = ?"], [taskname])
         except Exception as e:
             print(f"auto replace read transfer records failed: {e}")
             return []
