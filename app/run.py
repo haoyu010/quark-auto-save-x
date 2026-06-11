@@ -748,6 +748,57 @@ def register_metrics_sync_routes(app):
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)})
 
+DEFAULT_MEDIA_EXCLUDE_KEYWORDS = (
+    "海报,poster,posters,封面,cover,covers,图片,image,images,"
+    "备用,backup,bak,重复,duplicate,duplicates,"
+    "sample,samples,样片,预览,nfo,txt,url,jpg,jpeg,png,webp"
+)
+
+def _split_filter_terms(value):
+    text = str(value or "").replace("，", ",")
+    return [item.strip() for item in text.split(",") if item.strip()]
+
+def _merge_filter_terms(*groups):
+    merged = []
+    seen = set()
+    for group in groups:
+        for term in _split_filter_terms(group):
+            key = term.lower()
+            if key not in seen:
+                seen.add(key)
+                merged.append(term)
+    return ",".join(merged)
+
+def _file_filter_text(file):
+    if not isinstance(file, dict):
+        return str(file or "").lower()
+    parts = [
+        file.get("file_name", ""),
+        file.get("relative_path", ""),
+        file.get("path", ""),
+    ]
+    return " ".join(str(part) for part in parts if part).lower()
+
+def get_media_exclude_keywords():
+    task_settings = config_data.get("task_settings", {}) or {}
+    if "media_exclude_keywords" in task_settings:
+        return str(task_settings.get("media_exclude_keywords") or "").strip()
+    return DEFAULT_MEDIA_EXCLUDE_KEYWORDS
+
+def get_effective_filterwords(filterwords=""):
+    task_filterwords = str(filterwords or "").strip()
+    default_filterwords = get_media_exclude_keywords()
+    if not default_filterwords:
+        return task_filterwords
+    if not task_filterwords:
+        return default_filterwords
+    if "|" not in task_filterwords:
+        return _merge_filter_terms(task_filterwords, default_filterwords)
+    parts = task_filterwords.split("|")
+    block_part = parts[-1].strip()
+    merged_block = _merge_filter_terms(block_part, default_filterwords)
+    return "|".join(parts[:-1] + [merged_block])
+
 def advanced_filter_files(file_list, filterwords):
     """
     高级过滤函数，支持保留词和过滤词
@@ -775,8 +826,8 @@ def advanced_filter_files(file_list, filterwords):
         
         filtered_files = []
         for file in file_list:
-            file_name = file['file_name'].lower()
-            file_ext = os.path.splitext(file_name)[1].lower().lstrip('.')
+            file_name = _file_filter_text(file)
+            file_ext = os.path.splitext(str(file.get('file_name', '') if isinstance(file, dict) else file).lower())[1].lower().lstrip('.')
             
             # 检查过滤词是否存在于文件名中，或者过滤词等于扩展名
             if not any(word in file_name for word in filterwords_list) and not any(word == file_ext for word in filterwords_list):
@@ -820,7 +871,7 @@ def advanced_filter_files(file_list, filterwords):
         for condition_type, words in keep_conditions:
             filtered_by_keep = []
             for file in file_list:
-                file_name = file['file_name'].lower()
+                file_name = _file_filter_text(file)
                 
                 if condition_type == "or":
                     # 或关系：包含任意一个词即可
@@ -837,8 +888,8 @@ def advanced_filter_files(file_list, filterwords):
     if filterwords_list:
         filtered_files = []
         for file in file_list:
-            file_name = file['file_name'].lower()
-            file_ext = os.path.splitext(file_name)[1].lower().lstrip('.')
+            file_name = _file_filter_text(file)
+            file_ext = os.path.splitext(str(file.get('file_name', '') if isinstance(file, dict) else file).lower())[1].lower().lstrip('.')
             
             # 检查过滤词是否存在于文件名中，或者过滤词等于扩展名
             if not any(word in file_name for word in filterwords_list) and not any(word == file_ext for word in filterwords_list):
@@ -2229,6 +2280,7 @@ def get_data():
     data.setdefault("task_settings", {})
     data["task_settings"].setdefault("auto_replace_invalid_shareurl", "enabled")
     data["task_settings"].setdefault("auto_replace_min_score", 85)
+    data["task_settings"].setdefault("media_exclude_keywords", DEFAULT_MEDIA_EXCLUDE_KEYWORDS)
     data["task_settings"]["auto_replace_sources"] = ["telegram"]
 
     # 发送webui信息，但不发送密码原文
@@ -2412,6 +2464,7 @@ def update():
     })
     config_data["source"] = {"telegram": source_cfg.get("telegram", {})}
     config_data.setdefault("task_settings", {})
+    config_data["task_settings"].setdefault("media_exclude_keywords", DEFAULT_MEDIA_EXCLUDE_KEYWORDS)
     config_data["task_settings"]["auto_replace_sources"] = ["telegram"]
     for task in config_data.get("tasklist", []) or []:
         if isinstance(task, dict):
@@ -3622,7 +3675,7 @@ def get_share_detail():
             sorted_files = sorted(files_to_process, key=extract_sort_value)
             
             # 应用高级过滤词过滤
-            filterwords = regex.get("filterwords", "")
+            filterwords = get_effective_filterwords(regex.get("filterwords", ""))
             if filterwords:
                 # 使用高级过滤函数
                 filtered_files = advanced_filter_files(sorted_files, filterwords)
@@ -3665,7 +3718,7 @@ def get_share_detail():
                 
             
             # 应用高级过滤词过滤
-            filterwords = regex.get("filterwords", "")
+            filterwords = get_effective_filterwords(regex.get("filterwords", ""))
             if filterwords:
                 # 使用高级过滤函数
                 filtered_files = advanced_filter_files(share_detail["list"], filterwords)
@@ -3703,7 +3756,7 @@ def get_share_detail():
             )
             
             # 应用高级过滤词过滤
-            filterwords = regex.get("filterwords", "")
+            filterwords = get_effective_filterwords(regex.get("filterwords", ""))
             if filterwords:
                 # 使用高级过滤函数
                 filtered_files = advanced_filter_files(share_detail["list"], filterwords)
@@ -3725,6 +3778,9 @@ def get_share_detail():
             return share_detail
 
     share_detail = preview_regex(share_detail)
+
+    if "list" in share_detail and isinstance(share_detail["list"], list):
+        share_detail["list"] = [item for item in share_detail["list"] if not item.get("filtered")]
 
     # 再次处理文件夹的include_items字段，确保预览后的数据也正确
     if "list" in share_detail and isinstance(share_detail["list"], list):

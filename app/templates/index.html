@@ -837,7 +837,7 @@
                 <div class="input-group-prepend">
                   <span class="input-group-text">剧集保存路径</span>
                 </div>
-                <input type="text" class="form-control" v-model="formData.task_settings.tv_save_path" placeholder="剧集目录前缀/剧名 (年份)/剧名 - S季数" title="设置剧集类型内容（和电视任务智能填充）的默认保存路径格式，在影视发现（和任务列表）页面创建剧集（和电视）任务时自动填充。支持变量：剧名、年份、季数">
+                <input type="text" class="form-control" v-model="formData.task_settings.tv_save_path" placeholder="剧集目录前缀/剧名/Season 季数" title="设置剧集类型内容（和电视任务智能填充）的默认保存路径格式，在影视发现（和任务列表）页面创建剧集（和电视）任务时自动填充。支持变量：剧名、年份、季数">
               </div>
             </div>
 
@@ -846,7 +846,7 @@
                 <div class="input-group-prepend">
                   <span class="input-group-text">动画保存路径</span>
                 </div>
-                <input type="text" class="form-control" v-model="formData.task_settings.anime_save_path" placeholder="动画目录前缀/剧名 (年份)/剧名 - S季数" title="设置动画类型内容的默认保存路径格式，在影视发现页面创建动画任务时自动填充。支持变量：剧名、年份、季数">
+                <input type="text" class="form-control" v-model="formData.task_settings.anime_save_path" placeholder="动画目录前缀/剧名/Season 季数" title="设置动画类型内容的默认保存路径格式，在影视发现页面创建动画任务时自动填充。支持变量：剧名、年份、季数">
               </div>
             </div>
 
@@ -855,7 +855,7 @@
                 <div class="input-group-prepend">
                   <span class="input-group-text">综艺保存路径</span>
                 </div>
-                <input type="text" class="form-control" v-model="formData.task_settings.variety_save_path" placeholder="综艺目录前缀/剧名 (年份)/剧名 - S季数" title="设置综艺类型内容的默认保存路径格式，在影视发现页面创建综艺任务时自动填充。支持变量：剧名、年份、季数">
+                <input type="text" class="form-control" v-model="formData.task_settings.variety_save_path" placeholder="综艺目录前缀/剧名/Season 季数" title="设置综艺类型内容的默认保存路径格式，在影视发现页面创建综艺任务时自动填充。支持变量：剧名、年份、季数">
               </div>
             </div>
 
@@ -864,7 +864,7 @@
                 <div class="input-group-prepend">
                   <span class="input-group-text">纪录片保存路径</span>
                 </div>
-                <input type="text" class="form-control" v-model="formData.task_settings.documentary_save_path" placeholder="纪录片目录前缀/剧名 (年份)/剧名 - S季数" title="设置纪录片类型内容的默认保存路径格式，在影视发现页面创建纪录片任务时自动填充。支持变量：剧名、年份、季数">
+                <input type="text" class="form-control" v-model="formData.task_settings.documentary_save_path" placeholder="纪录片目录前缀/剧名/Season 季数" title="设置纪录片类型内容的默认保存路径格式，在影视发现页面创建纪录片任务时自动填充。支持变量：剧名、年份、季数">
               </div>
             </div>
 
@@ -947,6 +947,15 @@
                   </div>
                   <input type="number" class="form-control" min="0" max="100" step="1" v-model.number="formData.task_settings.auto_replace_min_score" title="候选链接评分达到该值才会自动替换，建议保持 85 以上以避免质量下降">
                 </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="input-group">
+                <div class="input-group-prepend">
+                  <span class="input-group-text">默认排除项</span>
+                </div>
+                <input type="text" class="form-control" v-model="formData.task_settings.media_exclude_keywords" placeholder="海报,poster,封面,备用,backup,重复,nfo,txt,jpg,png" title="创建和运行任务时默认排除的文件或文件夹关键词，会与任务自己的过滤词合并；留空则不启用默认排除">
               </div>
             </div>
 
@@ -3478,16 +3487,17 @@
           tv_show_keywords: [],
           task_settings: {
             movie_save_path: "电影目录前缀/片名 (年份)",
-            tv_save_path: "剧集目录前缀/剧名 (年份)/剧名 - S季数",
-            anime_save_path: "动画目录前缀/剧名 (年份)/剧名 - S季数",
-            variety_save_path: "综艺目录前缀/剧名 (年份)/剧名 - S季数",
-            documentary_save_path: "纪录片目录前缀/剧名 (年份)/剧名 - S季数",
+            tv_save_path: "剧集目录前缀/剧名/Season 季数",
+            anime_save_path: "动画目录前缀/剧名/Season 季数",
+            variety_save_path: "综艺目录前缀/剧名/Season 季数",
+            documentary_save_path: "纪录片目录前缀/剧名/Season 季数",
             movie_naming_pattern: "^(.*)\\.([^.]+)",
             movie_naming_replace: "片名 (年份).\\2",
             tv_naming_rule: "剧名 - S季数E[]",
             tv_ignore_extension: true,
             subtitle_naming_rule: "zh",
             subtitle_add_language_code: false,
+            media_exclude_keywords: "海报,poster,posters,封面,cover,covers,图片,image,images,备用,backup,bak,重复,duplicate,duplicates,sample,samples,样片,预览,nfo,txt,url,jpg,jpeg,png,webp",
             auto_search_resources: "enabled",
             auto_search_resources_on_edit: "enabled",
             auto_replace_invalid_shareurl: "enabled",
@@ -9278,16 +9288,17 @@
               if (!config_data.task_settings) {
                 config_data.task_settings = {
                   movie_save_path: "电影目录前缀/片名 (年份)",
-                  tv_save_path: "剧集目录前缀/剧名 (年份)/剧名 - S季数",
-                  anime_save_path: "动画目录前缀/剧名 (年份)/剧名 - S季数",
-                  variety_save_path: "综艺目录前缀/剧名 (年份)/剧名 - S季数",
-                  documentary_save_path: "纪录片目录前缀/剧名 (年份)/剧名 - S季数",
+                  tv_save_path: "剧集目录前缀/剧名/Season 季数",
+                  anime_save_path: "动画目录前缀/剧名/Season 季数",
+                  variety_save_path: "综艺目录前缀/剧名/Season 季数",
+                  documentary_save_path: "纪录片目录前缀/剧名/Season 季数",
                   movie_naming_pattern: "^(.*)\\.([^.]+)",
                   movie_naming_replace: "片名 (年份).\\2",
                   tv_naming_rule: "剧名 - S季数E[]",
                   tv_ignore_extension: true,
                   subtitle_naming_rule: "zh",
                   subtitle_add_language_code: false,
+                  media_exclude_keywords: "海报,poster,posters,封面,cover,covers,图片,image,images,备用,backup,bak,重复,duplicate,duplicates,sample,samples,样片,预览,nfo,txt,url,jpg,jpeg,png,webp",
                   auto_search_resources: "enabled",
                   auto_search_resources_on_edit: "enabled",
                   auto_replace_invalid_shareurl: "enabled",
@@ -9295,6 +9306,30 @@
                   auto_extract_archive: "disabled"
                 };
               }
+              const mediaPathTemplateDefaults = {
+                tv_save_path: {
+                  legacy: "剧集目录前缀/剧名 (年份)/剧名 - S季数",
+                  current: "剧集目录前缀/剧名/Season 季数"
+                },
+                anime_save_path: {
+                  legacy: "动画目录前缀/剧名 (年份)/剧名 - S季数",
+                  current: "动画目录前缀/剧名/Season 季数"
+                },
+                variety_save_path: {
+                  legacy: "综艺目录前缀/剧名 (年份)/剧名 - S季数",
+                  current: "综艺目录前缀/剧名/Season 季数"
+                },
+                documentary_save_path: {
+                  legacy: "纪录片目录前缀/剧名 (年份)/剧名 - S季数",
+                  current: "纪录片目录前缀/剧名/Season 季数"
+                }
+              };
+              Object.keys(mediaPathTemplateDefaults).forEach(key => {
+                const rule = mediaPathTemplateDefaults[key];
+                if (!config_data.task_settings[key] || config_data.task_settings[key] === rule.legacy) {
+                  config_data.task_settings[key] = rule.current;
+                }
+              });
               // 确保电影命名规则字段存在，只在字段不存在时设置默认值，允许用户设置为空字符串
               if (config_data.task_settings.movie_naming_pattern === undefined) {
                 config_data.task_settings.movie_naming_pattern = "^(.*)\\.([^.]+)";
@@ -9312,6 +9347,10 @@
               }
               if (config_data.task_settings.subtitle_add_language_code === undefined) {
                 config_data.task_settings.subtitle_add_language_code = false;
+              }
+              // 确保默认排除项存在，避免海报/备用/重复文件进入媒体库
+              if (config_data.task_settings.media_exclude_keywords === undefined) {
+                config_data.task_settings.media_exclude_keywords = "海报,poster,posters,封面,cover,covers,图片,image,images,备用,backup,bak,重复,duplicate,duplicates,sample,samples,样片,预览,nfo,txt,url,jpg,jpeg,png,webp";
               }
               // 确保自动搜索资源设置存在
               if (!config_data.task_settings.auto_search_resources) {
@@ -9865,7 +9904,7 @@
         getTvSavePathTemplate() {
           const taskSettings = this.formData.task_settings || {};
           const template = (taskSettings.tv_save_path || "").trim();
-          const defaultTemplate = "剧集目录前缀/剧名 (年份)/剧名 - S季数";
+          const defaultTemplate = "剧集目录前缀/剧名/Season 季数";
           return template || defaultTemplate;
         },
 
@@ -15975,86 +16014,25 @@
           }
           this.createTask.taskData.calendar_info.extracted.content_type = contentType;
 
-          // 检查当前内容类型是否使用了自定义设置
-          const isCustomSettings = this.isUsingCustomTaskSettingsForType(taskSettings, contentType);
-
-          if (!isCustomSettings) {
-            // 如果当前类型没有自定义设置，使用原有的继承逻辑
-            this.createTask.taskData.taskname = item.title || "";
-
-            // 继承最后一个任务的配置
-            if (this.formData.tasklist && this.formData.tasklist.length > 0) {
-              const lastTask = this.formData.tasklist[this.formData.tasklist.length - 1];
-              this.createTask.taskData.savepath = lastTask.savepath || "";
-              this.createTask.taskData.pattern = lastTask.pattern || "";
-              this.createTask.taskData.replace = lastTask.replace || "";
-              this.createTask.taskData.use_sequence_naming = lastTask.use_sequence_naming || false;
-              this.createTask.taskData.use_episode_naming = lastTask.use_episode_naming || false;
-              this.createTask.taskData.sequence_naming = lastTask.sequence_naming || "";
-              this.createTask.taskData.episode_naming = lastTask.episode_naming || "";
-            }
-
-            // 但是对于电视类内容，总是应用电视命名规则
-            if (isTvContent) {
-              const title = item.title || "";
-              const tvInfo = this.extractTvInfo(title);
-              // 使用用户设置的电视命名规则，如果没有设置则使用默认值
-              const namingRule = taskSettings.tv_naming_rule && taskSettings.tv_naming_rule.trim() !== ""
-                ? taskSettings.tv_naming_rule
-                : "剧名 - S季数E[]";
-
-              const generatedNamingRule = this.generateTvNamingRule(namingRule, tvInfo.seriesName, tvInfo.season);
-
-              this.createTask.taskData.taskname = tvInfo.seriesName;
-              this.createTask.taskData.use_episode_naming = true;
-              this.createTask.taskData.episode_naming = generatedNamingRule;
-              this.createTask.taskData.pattern = generatedNamingRule; // 同时设置到pattern字段以便模态框显示
-              this.createTask.taskData.ignore_extension = taskSettings.tv_ignore_extension !== undefined ? taskSettings.tv_ignore_extension : true; // 应用电视忽略后缀设置
-            }
-
-            // 设置其他默认值
-            this.createTask.taskData.shareurl = "";
-            this.createTask.taskData.enddate = "";
-            this.createTask.taskData.runweek = [1, 2, 3, 4, 5, 6, 7];
-            this.createTask.taskData.filterwords = "";
-            this.createTask.taskData.startfid = "";
-            this.createTask.taskData.update_subdir = "";
-
-            // 设置默认的插件配置，并应用全局配置
-            if (this.formData.task_plugins_config_default) {
-              this.createTask.taskData.addition = { ...this.formData.task_plugins_config_default };
-              this.applyGlobalPluginConfig(this.createTask.taskData);
-            }
-            return;
-          }
-
-          // 使用自定义设置进行智能填充
-
           // 提取影片信息
           const title = item.title || "";
           const year = movieData.year || "";
 
           // 获取对应的配置
-          let savePathTemplate = taskSettings.movie_save_path;
-          let namingRule = "";
+          let savePathTemplate = this.getMediaSavePathTemplate(contentType, taskSettings);
+          let namingRule = taskSettings.tv_naming_rule && taskSettings.tv_naming_rule.trim() !== ""
+            ? taskSettings.tv_naming_rule
+            : "剧名 - S季数E[]";
           let useEpisodeNaming = false;
 
           // 根据内容类型获取对应的配置
           if (contentType === 'tv') {
-            savePathTemplate = taskSettings.tv_save_path;
-            namingRule = taskSettings.tv_naming_rule;
             useEpisodeNaming = true;
           } else if (contentType === 'anime') {
-            savePathTemplate = taskSettings.anime_save_path;
-            namingRule = taskSettings.tv_naming_rule;
             useEpisodeNaming = true;
           } else if (contentType === 'variety') {
-            savePathTemplate = taskSettings.variety_save_path;
-            namingRule = taskSettings.tv_naming_rule;
             useEpisodeNaming = true;
           } else if (contentType === 'documentary') {
-            savePathTemplate = taskSettings.documentary_save_path;
-            namingRule = taskSettings.tv_naming_rule;
             useEpisodeNaming = true;
           }
 
@@ -16123,14 +16101,51 @@
             this.applyGlobalPluginConfig(this.createTask.taskData);
           }
         },
-        isUsingCustomTaskSettingsForType(taskSettings, contentType) {
-          // 检查特定内容类型是否使用了自定义任务设置
-          const defaultSettings = {
+        getMediaSavePathTemplate(contentType, taskSettings) {
+          const defaults = {
             movie: "电影目录前缀/片名 (年份)",
+            tv: "剧集目录前缀/剧名/Season 季数",
+            anime: "动画目录前缀/剧名/Season 季数",
+            variety: "综艺目录前缀/剧名/Season 季数",
+            documentary: "纪录片目录前缀/剧名/Season 季数"
+          };
+          const legacyDefaults = {
             tv: "剧集目录前缀/剧名 (年份)/剧名 - S季数",
             anime: "动画目录前缀/剧名 (年份)/剧名 - S季数",
             variety: "综艺目录前缀/剧名 (年份)/剧名 - S季数",
             documentary: "纪录片目录前缀/剧名 (年份)/剧名 - S季数"
+          };
+          const settingKeys = {
+            movie: 'movie_save_path',
+            tv: 'tv_save_path',
+            anime: 'anime_save_path',
+            variety: 'variety_save_path',
+            documentary: 'documentary_save_path'
+          };
+          const safeType = defaults[contentType] ? contentType : 'movie';
+          const key = settingKeys[safeType];
+          const template = ((taskSettings || {})[key] || "").trim();
+          if (!template || template === legacyDefaults[safeType]) {
+            return defaults[safeType];
+          }
+          return template;
+        },
+        normalizeMediaSavePath(path) {
+          return String(path || '')
+            .replace(/\\/g, '/')
+            .replace(/\/{2,}/g, '/')
+            .replace(/^\//, '')
+            .replace(/\/$/, '')
+            .trim();
+        },
+        isUsingCustomTaskSettingsForType(taskSettings, contentType) {
+          // 检查特定内容类型是否使用了自定义任务设置
+          const defaultSettings = {
+            movie: "电影目录前缀/片名 (年份)",
+            tv: "剧集目录前缀/剧名/Season 季数",
+            anime: "动画目录前缀/剧名/Season 季数",
+            variety: "综艺目录前缀/剧名/Season 季数",
+            documentary: "纪录片目录前缀/剧名/Season 季数"
           };
 
           const settingKeys = {
@@ -16155,10 +16170,10 @@
           // 注意：电视命名规则总是生效，不参与自定义判断
           const defaultSettings = {
             movie_save_path: "电影目录前缀/片名 (年份)",
-            tv_save_path: "剧集目录前缀/剧名 (年份)/剧名 - S季数",
-            anime_save_path: "动画目录前缀/剧名 (年份)/剧名 - S季数",
-            variety_save_path: "综艺目录前缀/剧名 (年份)/剧名 - S季数",
-            documentary_save_path: "纪录片目录前缀/剧名 (年份)/剧名 - S季数"
+            tv_save_path: "剧集目录前缀/剧名/Season 季数",
+            anime_save_path: "动画目录前缀/剧名/Season 季数",
+            variety_save_path: "综艺目录前缀/剧名/Season 季数",
+            documentary_save_path: "纪录片目录前缀/剧名/Season 季数"
             // tv_naming_rule 不参与判断，总是生效
           };
 
@@ -16319,7 +16334,7 @@
         },
         generateMovieSavePath(template, title, year) {
           // 生成电影保存路径
-          let savePath = template;
+          let savePath = template || "电影目录前缀/片名 (年份)";
 
           // 替换片名
           savePath = savePath.replace(/片名/g, title);
@@ -16332,11 +16347,11 @@
             savePath = savePath.replace(/\s*\(年份\)/g, '');
           }
 
-          return savePath;
+          return this.normalizeMediaSavePath(savePath);
         },
         generateTvSavePath(template, seriesName, year, season, isFirstSeason) {
           // 生成电视剧保存路径
-          let savePath = template;
+          let savePath = template || "剧集目录前缀/剧名/Season 季数";
 
           // 替换剧名
           savePath = savePath.replace(/剧名/g, seriesName);
@@ -16353,7 +16368,7 @@
             savePath = savePath.replace(/\s*\(年份\)/g, '');
           }
 
-          return savePath;
+          return this.normalizeMediaSavePath(savePath);
         },
         generateTvNamingRule(template, seriesName, season) {
           // 生成电视剧命名规则

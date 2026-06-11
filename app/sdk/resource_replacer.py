@@ -16,6 +16,12 @@ QUALITY_ORDER = {
     "4320p": 4320,
 }
 
+DEFAULT_MEDIA_EXCLUDE_KEYWORDS = (
+    "海报,poster,posters,封面,cover,covers,图片,image,images,"
+    "备用,backup,bak,重复,duplicate,duplicates,"
+    "sample,samples,样片,预览,nfo,txt,url,jpg,jpeg,png,webp"
+)
+
 
 class ResourceAutoReplacer:
     """Search, validate, score, and replace invalid Quark share links."""
@@ -233,7 +239,7 @@ class ResourceAutoReplacer:
 
     def filter_files_by_task(self, files: List[Dict[str, Any]], task: Dict[str, Any]) -> List[Dict[str, Any]]:
         usable = [item for item in files if isinstance(item, dict) and not item.get("dir")]
-        filterwords = str(task.get("filterwords") or "").strip()
+        filterwords = self._effective_filterwords(task)
         if not filterwords:
             return usable
 
@@ -257,6 +263,40 @@ class ResourceAutoReplacer:
         if blocked:
             filtered = [item for item in filtered if not self._matches_any_filter(item, blocked)]
         return filtered
+
+    def _effective_filterwords(self, task: Dict[str, Any]) -> str:
+        task_filterwords = str((task or {}).get("filterwords") or "").strip()
+        task_settings = self.config_data.get("task_settings", {}) or {}
+        if "media_exclude_keywords" in task_settings:
+            default_filterwords = str(task_settings.get("media_exclude_keywords") or "").strip()
+        else:
+            default_filterwords = DEFAULT_MEDIA_EXCLUDE_KEYWORDS
+        if not default_filterwords:
+            return task_filterwords
+        if not task_filterwords:
+            return default_filterwords
+        if "|" not in task_filterwords:
+            return self._merge_filter_terms(task_filterwords, default_filterwords)
+        parts = task_filterwords.split("|")
+        block_part = parts[-1].strip()
+        merged_block = self._merge_filter_terms(block_part, default_filterwords)
+        return "|".join(parts[:-1] + [merged_block])
+
+    def _merge_filter_terms(self, *groups: str) -> str:
+        merged = []
+        seen = set()
+        for group in groups:
+            text = str(group or "").replace("，", ",")
+            for term in text.split(","):
+                term = term.strip()
+                if not term:
+                    continue
+                key = term.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(term)
+        return ",".join(merged)
 
     def score_candidate(
         self,
@@ -415,8 +455,13 @@ class ResourceAutoReplacer:
 
     def _matches_any_filter(self, item: Dict[str, Any], words: List[str]) -> bool:
         name = str(item.get("file_name", "")).lower()
+        text = " ".join([
+            str(item.get("file_name", "")),
+            str(item.get("relative_path", "")),
+            str(item.get("path", "")),
+        ]).lower()
         ext = os.path.splitext(name)[1].lower().lstrip(".")
-        return any(word in name or word == ext for word in words)
+        return any(word in text or word == ext for word in words)
 
     def _avg_size(self, files: List[Dict[str, Any]]) -> float:
         sizes = [

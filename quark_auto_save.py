@@ -69,6 +69,60 @@ def notify_calendar_changed_safe(reason):
         # 仅输出提示，不影响主流程
         print(f"触发SSE通知失败: {e}")
 
+DEFAULT_MEDIA_EXCLUDE_KEYWORDS = (
+    "海报,poster,posters,封面,cover,covers,图片,image,images,"
+    "备用,backup,bak,重复,duplicate,duplicates,"
+    "sample,samples,样片,预览,nfo,txt,url,jpg,jpeg,png,webp"
+)
+
+def _split_filter_terms(value):
+    text = str(value or "").replace("，", ",")
+    return [item.strip() for item in text.split(",") if item.strip()]
+
+def _merge_filter_terms(*groups):
+    merged = []
+    seen = set()
+    for group in groups:
+        for term in _split_filter_terms(group):
+            key = term.lower()
+            if key not in seen:
+                seen.add(key)
+                merged.append(term)
+    return ",".join(merged)
+
+def _file_filter_text(file):
+    if not isinstance(file, dict):
+        return str(file or "").lower()
+    parts = [
+        file.get("file_name", ""),
+        file.get("relative_path", ""),
+        file.get("path", ""),
+    ]
+    return " ".join(str(part) for part in parts if part).lower()
+
+def get_media_exclude_keywords(config_data=None):
+    task_settings = (config_data or CONFIG_DATA or {}).get("task_settings", {}) or {}
+    if "media_exclude_keywords" in task_settings:
+        return str(task_settings.get("media_exclude_keywords") or "").strip()
+    return DEFAULT_MEDIA_EXCLUDE_KEYWORDS
+
+def get_effective_filterwords(task=None, config_data=None):
+    task_filterwords = ""
+    if isinstance(task, dict):
+        task_filterwords = str(task.get("filterwords") or "").strip()
+    default_filterwords = get_media_exclude_keywords(config_data)
+    if not default_filterwords:
+        return task_filterwords
+    if not task_filterwords:
+        return default_filterwords
+    if "|" not in task_filterwords:
+        return _merge_filter_terms(task_filterwords, default_filterwords)
+
+    parts = task_filterwords.split("|")
+    block_part = parts[-1].strip()
+    merged_block = _merge_filter_terms(block_part, default_filterwords)
+    return "|".join(parts[:-1] + [merged_block])
+
 def advanced_filter_files(file_list, filterwords):
     """
     高级过滤函数，支持保留词和过滤词
@@ -96,8 +150,8 @@ def advanced_filter_files(file_list, filterwords):
         
         filtered_files = []
         for file in file_list:
-            file_name = file['file_name'].lower()
-            file_ext = os.path.splitext(file_name)[1].lower().lstrip('.')
+            file_name = _file_filter_text(file)
+            file_ext = os.path.splitext(str(file.get('file_name', '') if isinstance(file, dict) else file).lower())[1].lower().lstrip('.')
             
             # 检查过滤词是否存在于文件名中，或者过滤词等于扩展名
             if not any(word in file_name for word in filterwords_list) and not any(word == file_ext for word in filterwords_list):
@@ -141,7 +195,7 @@ def advanced_filter_files(file_list, filterwords):
         for condition_type, words in keep_conditions:
             filtered_by_keep = []
             for file in file_list:
-                file_name = file['file_name'].lower()
+                file_name = _file_filter_text(file)
                 
                 if condition_type == "or":
                     # 或关系：包含任意一个词即可
@@ -158,8 +212,8 @@ def advanced_filter_files(file_list, filterwords):
     if filterwords_list:
         filtered_files = []
         for file in file_list:
-            file_name = file['file_name'].lower()
-            file_ext = os.path.splitext(file_name)[1].lower().lstrip('.')
+            file_name = _file_filter_text(file)
+            file_ext = os.path.splitext(str(file.get('file_name', '') if isinstance(file, dict) else file).lower())[1].lower().lstrip('.')
             
             # 检查过滤词是否存在于文件名中，或者过滤词等于扩展名
             if not any(word in file_name for word in filterwords_list) and not any(word == file_ext for word in filterwords_list):
@@ -1687,6 +1741,7 @@ class Config:
         task_settings = config_data.setdefault("task_settings", {})
         task_settings.setdefault("auto_replace_invalid_shareurl", "enabled")
         task_settings.setdefault("auto_replace_min_score", 85)
+        task_settings.setdefault("media_exclude_keywords", DEFAULT_MEDIA_EXCLUDE_KEYWORDS)
         task_settings["auto_replace_sources"] = ["telegram"]
         source_settings = config_data.setdefault("source", {})
         source_settings.pop("pan" + "sou", None)
@@ -2387,9 +2442,10 @@ class Quark:
         collect_files_recursive(extracted_folder_fid)
         
         # 第四步：应用过滤规则并删除被过滤掉的文件
-        if task and task.get("filterwords"):
+        effective_filterwords = get_effective_filterwords(task, CONFIG_DATA) if task else ""
+        if effective_filterwords:
             # 应用过滤规则，获取通过过滤的文件列表
-            filtered_files = advanced_filter_files(all_files, task["filterwords"])
+            filtered_files = advanced_filter_files(all_files, effective_filterwords)
             
             # 找出被过滤掉的文件（不在过滤后的列表中）
             filtered_file_fids = {f["fid"] for f in filtered_files}
@@ -3419,12 +3475,13 @@ class Quark:
         share_file_list.sort(key=sort_file_by_name, reverse=True)
 
         # 应用过滤词过滤
-        if task.get("filterwords"):
+        effective_filterwords = get_effective_filterwords(task, CONFIG_DATA)
+        if effective_filterwords:
             # 记录过滤前的文件总数（包括文件夹）
             original_total_count = len(share_file_list)
 
             # 使用高级过滤函数处理保留词和过滤词
-            share_file_list = advanced_filter_files(share_file_list, task["filterwords"])
+            share_file_list = advanced_filter_files(share_file_list, effective_filterwords)
             
             # 打印过滤信息（格式保持不变）
             # 计算剩余文件数
@@ -3436,7 +3493,7 @@ class Quark:
             if task.get("use_sequence_naming") or task.get("use_episode_naming"):
                 # 计算剩余的实际可用文件数（排除文件夹）
                 remaining_usable_count = len([f for f in share_file_list if not f.get("dir", False)])
-                print(f"📑 应用过滤词: {task['filterwords']}，剩余 {remaining_usable_count} 个项目")
+                print(f"📑 应用过滤词: {effective_filterwords}，剩余 {remaining_usable_count} 个项目")
             else:
                 # 正则模式下，需要先检查哪些文件/文件夹会被实际转存
                 pattern, replace = "", ""
@@ -3470,7 +3527,7 @@ class Quark:
                     print(f"⚠️ 计算可处理项目时出错: {str(e)}")
                     remaining_count = len([f for f in share_file_list if re.search(pattern, f["file_name"])])
                 
-                print(f"📑 应用过滤词: {task['filterwords']}，剩余 {remaining_count} 个项目")
+                print(f"📑 应用过滤词: {effective_filterwords}，剩余 {remaining_count} 个项目")
             print()
 
         auto_replace_floor = get_auto_replace_saved_episode_floor(task)
@@ -4547,12 +4604,13 @@ class Quark:
             is_empty_dir = len(non_dir_files) == 0
 
             # 应用过滤词过滤（修复bug：为本地文件重命名添加过滤规则）
-            if task.get("filterwords"):
+            effective_filterwords = get_effective_filterwords(task, CONFIG_DATA)
+            if effective_filterwords:
                 # 记录过滤前的文件总数
                 original_total_count = len(dir_file_list)
                 
                 # 使用高级过滤函数处理保留词和过滤词
-                dir_file_list = advanced_filter_files(dir_file_list, task["filterwords"])
+                dir_file_list = advanced_filter_files(dir_file_list, effective_filterwords)
                 dir_file_name_list = [item["file_name"] for item in dir_file_list]
 
             # 找出当前最大序号
@@ -4987,13 +5045,14 @@ class Quark:
                             
                             # 检查过滤词
                             should_filter = False
-                            if task.get("filterwords"):
+                            effective_filterwords = get_effective_filterwords(task, CONFIG_DATA)
+                            if effective_filterwords:
                                 # 使用高级过滤函数检查文件名
                                 temp_file_list = [{"file_name": share_file["file_name"]}]
-                                if advanced_filter_files(temp_file_list, task["filterwords"]):
+                                if advanced_filter_files(temp_file_list, effective_filterwords):
                                     # 检查目标文件名
                                     temp_save_list = [{"file_name": save_name}]
-                                    if not advanced_filter_files(temp_save_list, task["filterwords"]):
+                                    if not advanced_filter_files(temp_save_list, effective_filterwords):
                                         should_filter = True
                                 else:
                                     should_filter = True
@@ -5008,10 +5067,11 @@ class Quark:
                             # 无法提取集号，使用原文件名（仍然检查过滤词）
                             # 检查过滤词
                             should_filter = False
-                            if task.get("filterwords"):
+                            effective_filterwords = get_effective_filterwords(task, CONFIG_DATA)
+                            if effective_filterwords:
                                 # 使用高级过滤函数检查文件名
                                 temp_file_list = [{"file_name": share_file["file_name"]}]
-                                if not advanced_filter_files(temp_file_list, task["filterwords"]):
+                                if not advanced_filter_files(temp_file_list, effective_filterwords):
                                     should_filter = True
                             
                             # 只处理不需要过滤的文件
@@ -5275,12 +5335,13 @@ class Quark:
             renamed_files = {}
             
             # 应用过滤词过滤（修复bug：为本地文件重命名添加过滤规则）
-            if task.get("filterwords"):
+            effective_filterwords = get_effective_filterwords(task, CONFIG_DATA)
+            if effective_filterwords:
                 # 记录过滤前的文件总数
                 original_total_count = len(dir_file_list)
                 
                 # 使用高级过滤函数处理保留词和过滤词
-                dir_file_list = advanced_filter_files(dir_file_list, task["filterwords"])
+                dir_file_list = advanced_filter_files(dir_file_list, effective_filterwords)
             
             # 使用一个列表收集所有需要重命名的操作（rename_logs 已在分支开头初始化，此处只追加）
             rename_operations = []
@@ -5431,12 +5492,13 @@ class Quark:
             dir_file_list = self.ls_dir(self.savepath_fid[savepath])
             
             # 应用过滤词过滤（修复bug：为本地文件重命名添加过滤规则）
-            if task.get("filterwords"):
+            effective_filterwords = get_effective_filterwords(task, CONFIG_DATA)
+            if effective_filterwords:
                 # 记录过滤前的文件总数
                 original_total_count = len(dir_file_list)
                 
                 # 使用高级过滤函数处理保留词和过滤词
-                dir_file_list = advanced_filter_files(dir_file_list, task["filterwords"])
+                dir_file_list = advanced_filter_files(dir_file_list, effective_filterwords)
             
             # 使用一个列表收集所有需要重命名的操作
             rename_operations = []
