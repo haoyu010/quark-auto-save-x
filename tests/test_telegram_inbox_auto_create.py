@@ -12,6 +12,7 @@ from app.sdk.telegram_inbox import (
     build_media_task_from_share,
     extract_title_seed,
     is_authorized_message,
+    repair_media_library_task,
 )
 
 
@@ -785,6 +786,123 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(saved[-1]["tasklist"][0]["taskname"], "阿基拉")
         self.assertEqual(runs, [("阿基拉", 0)])
         self.assertTrue(result.run_started)
+
+    def test_service_runs_created_task_snapshot_even_if_save_hook_mutates_config(self):
+        account = FakeAccount({"nitian": [{"file_name": "S01E41.mp4", "dir": False, "fid": "f1"}]})
+        config = {
+            "push_config": {"TG_USER_ID": "42"},
+            "tasklist": [],
+            "task_settings": {
+                "telegram_inbox_media_root": "影视库",
+                "tv_naming_rule": "剧名 - S季数E[]",
+            },
+        }
+        runs = []
+
+        def mutate_during_save(data):
+            task = data["tasklist"][-1]
+            task["savepath"] = "影视库/电视剧/逆天邪神/Season 01"
+            task["content_type"] = "tv"
+            task["library_category"] = ""
+
+        service = TelegramAutoCreateService(
+            config,
+            account_factory=lambda: account,
+            tmdb_factory=lambda: FakeTMDB(
+                tv_results=[{
+                    "id": 235643,
+                    "name": "逆天邪神",
+                    "first_air_date": "2023-09-23",
+                    "genre_ids": [16, 10759, 10765],
+                    "origin_country": ["CN"],
+                    "original_language": "zh",
+                }],
+                details_by_id={
+                    235643: {
+                        "id": 235643,
+                        "name": "逆天邪神",
+                        "first_air_date": "2023-09-23",
+                        "origin_country": ["CN"],
+                        "original_language": "zh",
+                        "last_episode_to_air": {"season_number": 1},
+                        "genres": [{"id": 16, "name": "Animation"}],
+                    }
+                },
+            ),
+            save_config=mutate_during_save,
+            run_task=lambda task, index: runs.append(copy.deepcopy(task)),
+        )
+
+        result = service.handle_message({
+            "message_id": 3,
+            "chat": {"id": 42},
+            "from": {"id": 42},
+            "text": "逆天邪神 https://pan.quark.cn/s/nitian",
+        })
+
+        self.assertEqual(result.status, "created")
+        self.assertEqual(runs[0]["savepath"], "影视库/电视剧/国漫/逆天邪神/Season 01")
+        self.assertEqual(runs[0]["content_type"], "anime")
+        self.assertEqual(runs[0]["library_category"], "国漫")
+
+    def test_repair_media_library_task_restores_tmdb_category_path(self):
+        task = {
+            "taskname": "逆天邪神",
+            "shareurl": "https://pan.quark.cn/s/nitian",
+            "savepath": "影视库/电视剧/逆天邪神/Season 01",
+            "pattern": "逆天邪神 - S01E[]",
+            "episode_naming": "逆天邪神 - S01E[]",
+            "content_type": "tv",
+            "library_category": "",
+            "calendar_info": {
+                "extracted": {
+                    "show_name": "逆天邪神",
+                    "year": "2023",
+                    "content_type": "tv",
+                    "library_category": "",
+                    "season_number": 1,
+                },
+                "match": {
+                    "matched_show_name": "逆天邪神",
+                    "matched_year": "2023",
+                    "tmdb_id": 235643,
+                    "latest_season_number": 1,
+                    "latest_season_fetch_url": "/tv/235643/season/1",
+                },
+            },
+        }
+
+        changed = repair_media_library_task(
+            task,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            FakeTMDB(
+                details_by_id={
+                    235643: {
+                        "id": 235643,
+                        "name": "逆天邪神",
+                        "first_air_date": "2023-09-23",
+                        "origin_country": ["CN"],
+                        "original_language": "zh",
+                        "genres": [{"id": 16, "name": "Animation"}],
+                        "last_episode_to_air": {"season_number": 1},
+                    }
+                }
+            ),
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(task["savepath"], "影视库/电视剧/国漫/逆天邪神/Season 01")
+        self.assertEqual(task["content_type"], "anime")
+        self.assertEqual(task["library_category"], "国漫")
+        self.assertEqual(task["episode_naming"], "逆天邪神 - S01E[]")
+        self.assertEqual(task["calendar_info"]["extracted"]["content_type"], "anime")
+        self.assertEqual(task["calendar_info"]["extracted"]["library_category"], "国漫")
 
     def test_extract_title_seed_ignores_url_noise(self):
         self.assertEqual(

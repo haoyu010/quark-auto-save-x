@@ -1,3 +1,4 @@
+import copy
 import re
 import time
 from dataclasses import dataclass
@@ -769,6 +770,106 @@ def build_media_task_from_share(
     return task
 
 
+def repair_media_library_task(task: Dict[str, Any], config_data: Optional[Dict[str, Any]] = None, tmdb_service: Any = None) -> bool:
+    """Repair a Telegram-created media-library path from its TMDB binding."""
+    if not isinstance(task, dict) or not tmdb_service:
+        return False
+    config_data = config_data or {}
+    settings = _task_settings(config_data)
+    if not _normalize_media_save_path(str(settings.get("telegram_inbox_media_root") or "")):
+        return False
+
+    cal = task.get("calendar_info") or {}
+    match = cal.get("match") or {}
+    extracted = cal.get("extracted") or {}
+    tmdb_id = match.get("tmdb_id")
+    try:
+        tmdb_id = int(tmdb_id or 0)
+    except Exception:
+        tmdb_id = 0
+    if tmdb_id <= 0:
+        return False
+
+    details = _safe_tmdb_call(tmdb_service.get_tv_show_details, tmdb_id) or {}
+    classification_data = dict(details or {})
+    title = str(
+        details.get("name")
+        or match.get("matched_show_name")
+        or extracted.get("show_name")
+        or task.get("taskname")
+        or ""
+    ).strip()
+    if not title:
+        return False
+    year = _tmdb_year(classification_data, "tv") or str(match.get("matched_year") or extracted.get("year") or "")
+    try:
+        season = int(match.get("latest_season_number") or extracted.get("season_number") or task.get("matched_latest_season_number") or 1)
+    except Exception:
+        season = 1
+    if season <= 0:
+        season = 1
+
+    content_type = "anime" if _is_animation(title, [], config_data, classification_data) else "tv"
+    library_category = (
+        _classify_tv_library_category(title, [], classification_data, content_type)
+        if _has_library_classification_data(classification_data)
+        else ""
+    )
+    if not library_category:
+        return False
+
+    naming = _tv_naming_rule(str(settings.get("tv_naming_rule") or ""), title, season)
+    savepath = _telegram_inbox_root_save_path(settings, content_type, title, year, season, library_category)
+    if not savepath:
+        return False
+
+    before = {
+        "taskname": task.get("taskname"),
+        "savepath": task.get("savepath"),
+        "content_type": task.get("content_type"),
+        "library_category": task.get("library_category"),
+        "pattern": task.get("pattern"),
+        "episode_naming": task.get("episode_naming"),
+    }
+    task["taskname"] = title
+    task["savepath"] = savepath
+    task["content_type"] = content_type
+    task["library_category"] = library_category
+    task["matched_latest_season_number"] = season
+    task["pattern"] = naming
+    task["episode_naming"] = naming
+    task["use_episode_naming"] = True
+    task["ignore_extension"] = bool(settings.get("tv_ignore_extension", True))
+
+    cal.setdefault("extracted", {})
+    cal["extracted"].update({
+        "show_name": title,
+        "year": year,
+        "content_type": content_type,
+        "library_category": library_category,
+        "season_number": season,
+    })
+    cal.setdefault("match", {})
+    cal["match"].update({
+        "matched_show_name": title,
+        "matched_year": year,
+        "tmdb_id": tmdb_id,
+        "latest_season_number": season,
+        "latest_season_fetch_url": f"/tv/{tmdb_id}/season/{season}",
+    })
+    task["calendar_info"] = cal
+
+    after = {
+        "taskname": task.get("taskname"),
+        "savepath": task.get("savepath"),
+        "content_type": task.get("content_type"),
+        "library_category": task.get("library_category"),
+        "pattern": task.get("pattern"),
+        "episode_naming": task.get("episode_naming"),
+    }
+    return before != after
+
+
 def _message_chat_id(message: Dict[str, Any]) -> str:
     return str(((message.get("chat") or {}).get("id")) or "").strip()
 
@@ -827,8 +928,9 @@ class TelegramAutoCreateService:
         }
         self.config_data.setdefault("tasklist", []).append(task)
         task_index = len(self.config_data["tasklist"]) - 1
+        run_task_snapshot = copy.deepcopy(task)
         self.save_config(self.config_data)
-        self.run_task(task, task_index)
+        self.run_task(run_task_snapshot, task_index)
         self.logger(f"Telegram 自动收链已创建任务: {task.get('taskname', '')} -> {task.get('savepath', '')}")
         return TelegramAutoCreateResult(
             "created",

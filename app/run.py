@@ -20,8 +20,9 @@ from apscheduler.triggers.date import DateTrigger
 from queue import Queue
 from collections import deque
 from sdk.telegram_channel import TelegramChannelCache
-from sdk.telegram_inbox import TelegramAutoCreateService, TelegramInboxPoller
+from sdk.telegram_inbox import TelegramAutoCreateService, TelegramInboxPoller, repair_media_library_task
 from datetime import timedelta, datetime
+import copy
 import subprocess
 import requests
 import hashlib
@@ -2766,6 +2767,31 @@ def run_telegram_inbox_task_now(task, original_index=None):
     """Run one Telegram-created task in the background, ignoring schedule rules."""
     if not isinstance(task, dict):
         return
+    task = copy.deepcopy(task)
+    try:
+        tmdb_api_key = str(config_data.get("tmdb_api_key") or "").strip() if isinstance(config_data, dict) else ""
+        if tmdb_api_key:
+            tmdb_service = TMDBService(tmdb_api_key, get_poster_language_setting())
+            if repair_media_library_task(task, config_data, tmdb_service):
+                logging.info(f">>> Telegram 自动创建任务已修正媒体库路径: {task.get('taskname', '')} -> {task.get('savepath', '')}")
+        try:
+            if original_index is not None:
+                idx = int(original_index)
+                tasks = config_data.get("tasklist", []) if isinstance(config_data, dict) else []
+                if 0 <= idx < len(tasks):
+                    old_share = str((tasks[idx] or {}).get("shareurl") or "")
+                    new_share = str(task.get("shareurl") or "")
+                    if not new_share or old_share == new_share:
+                        current = tasks[idx] or {}
+                        watched_keys = ("taskname", "savepath", "content_type", "library_category", "pattern", "episode_naming", "calendar_info")
+                        if any(current.get(key) != task.get(key) for key in watched_keys):
+                            tasks[idx] = task
+                            Config.write_json(CONFIG_PATH, config_data)
+                            logging.info(f">>> Telegram 自动创建任务已回写媒体库路径: {task.get('savepath', '')}")
+        except Exception as persist_exc:
+            logging.warning(f">>> Telegram 自动创建任务修正路径回写失败: {persist_exc}")
+    except Exception as repair_exc:
+        logging.warning(f">>> Telegram 自动创建任务修正媒体库路径失败: {repair_exc}")
     task_name = task.get("taskname") or "Telegram"
     command = [PYTHON_PATH, "-u", SCRIPT_PATH, CONFIG_PATH]
 
