@@ -417,6 +417,8 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
             "名称：她战(2026)4K S01E01 - E16 HiveWeb": "她战",
             "名称：翘楚 (2026)剧情 陈都灵 4KHQHDR60FPS 更新15集": "翘楚",
             "名称：神墓(2022) 4K 帧享 更新至年番S03E46 HiveWeb": "神墓",
+            "名称：任意国漫 年番 (2026)动作 动画 奇幻 4KHQ 更新46集": "任意国漫",
+            "名称：测试动画年番（2026）4K HDR S03E46 HiveWeb": "测试动画",
         }
 
         for raw, expected in cases.items():

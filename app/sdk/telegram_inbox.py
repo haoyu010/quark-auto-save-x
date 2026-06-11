@@ -24,6 +24,7 @@ RELEASE_BRACKET_TAG_RE = re.compile(
 RELEASE_METADATA_START_RE = re.compile(
     r"(?:"
     r"[Ss]\d{1,2}[Ee]\d{1,4}|Season\s*\d{1,2}|第\s*[0-9一二三四五六七八九十零〇两]+\s*季|(?<![A-Za-z0-9])(?:EP|E)[\s._-]*\d{1,4}(?![A-Za-z0-9])|(?:第\s*)?[0-9一二三四五六七八九十零〇两]+\s*[集话話期]|"
+    r"(?:\s+年番|年番(?=\s|[\(（【\[]|[Ss]\d|$))|"
     r"\b(?:4K|8K|2160p|1080p|720p|REMUX|WEB[- ]?DL|BluRay|BDRip|HDRip|HDTV|H\.?264|H\.?265|x265|x264|AAC|DTS|DDP?\d?\.?\d?|Atmos|HDR|DV|HQ|HiveWeb|(?:8|10|12)[- ]?bit|\d{2,3}\s*FPS)\b|"
     r"\d{2,3}\s*帧|原盘|字幕|中字|外挂字幕|内封字幕|国语|粤语|国粤|双语|多音轨|简繁|高码率|高码|高帧率"
     r")",
