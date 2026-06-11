@@ -4,6 +4,8 @@ import unittest
 from app.sdk.telegram_inbox import (
     TelegramAutoCreateService,
     TelegramInboxPoller,
+    _classify_movie_library_category,
+    _classify_tv_library_category,
     _clean_media_title,
     _extract_year,
     _looks_like_series,
@@ -87,6 +89,8 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
             "id": 149,
             "title": "阿基拉",
             "release_date": "1988-07-16",
+            "genre_ids": [16],
+            "original_language": "ja",
         })
 
         task = build_media_task_from_share(
@@ -298,6 +302,8 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
             "id": 149,
             "title": "阿基拉",
             "release_date": "1988-07-16",
+            "genre_ids": [16],
+            "original_language": "ja",
         })
 
         task = build_media_task_from_share(
@@ -317,7 +323,40 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
 
         self.assertEqual(task["taskname"], "阿基拉")
         self.assertEqual(task["content_type"], "movie")
-        self.assertEqual(task["savepath"], "影视剧/电影/阿基拉 (1988)")
+        self.assertEqual(task["library_category"], "动画电影")
+        self.assertEqual(task["savepath"], "影视剧/电影/动画电影/阿基拉 (1988)")
+
+    def test_media_root_classifies_movie_library_category_like_organizer_rules(self):
+        account = FakeAccount({
+            "hk": [
+                {"file_name": "赌侠.1990.1080p.mkv", "dir": False, "fid": "f1"},
+            ],
+            "unknown": [
+                {"file_name": "未知电影.2024.1080p.mkv", "dir": False, "fid": "f2"},
+            ],
+        })
+
+        hk_task = build_media_task_from_share(
+            "https://pan.quark.cn/s/hk",
+            "名称: 赌侠 (1990) 1080P https://pan.quark.cn/s/hk",
+            account,
+            {"task_settings": {"telegram_inbox_media_root": "影视库"}},
+            FakeTMDB(movie={"id": 624, "title": "赌侠", "release_date": "1990-12-13", "original_language": "zh"}),
+        )
+
+        self.assertEqual(hk_task["library_category"], "华语电影")
+        self.assertEqual(hk_task["savepath"], "影视库/电影/华语电影/赌侠 (1990)")
+
+        unknown_task = build_media_task_from_share(
+            "https://pan.quark.cn/s/unknown",
+            "名称: 未知电影 (2024) https://pan.quark.cn/s/unknown",
+            account,
+            {"task_settings": {"telegram_inbox_media_root": "影视库"}},
+            FakeTMDB(movie={"id": 100, "title": "未知电影", "release_date": "2024-01-01"}),
+        )
+
+        self.assertEqual(unknown_task["library_category"], "其他电影")
+        self.assertEqual(unknown_task["savepath"], "影视库/电影/其他电影/未知电影 (2024)")
 
     def test_media_root_builds_anime_season_path_for_inbox_tasks(self):
         account = FakeAccount({
@@ -442,6 +481,35 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(task["content_type"], "anime")
         self.assertEqual(task["savepath"], "影视库/电视剧/日番/葬送的芙莉莲/Season 01")
 
+    def test_library_category_rules_match_organizer_defaults(self):
+        tv_cases = [
+            ({"genres": [{"id": 16}], "origin_country": ["CN"]}, "anime", "国漫"),
+            ({"genres": [{"id": 16}], "origin_country": ["JP"]}, "anime", "日番"),
+            ({"genres": [{"id": 99}], "origin_country": ["US"]}, "tv", "纪录片"),
+            ({"genres": [{"id": 10762}], "origin_country": ["US"]}, "tv", "儿童"),
+            ({"genres": [{"id": 10764}], "origin_country": ["CN"]}, "tv", "综艺"),
+            ({"origin_country": ["CN"]}, "tv", "国产剧"),
+            ({"origin_country": ["US"]}, "tv", "欧美剧"),
+            ({"origin_country": ["KR"]}, "tv", "日韩剧"),
+            ({}, "tv", "未分类"),
+        ]
+
+        for tmdb_data, content_type, expected in tv_cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(_classify_tv_library_category("", [], tmdb_data, content_type), expected)
+
+        movie_cases = [
+            ({"genre_ids": [16], "original_language": "ja"}, "动画电影"),
+            ({"original_language": "zh"}, "华语电影"),
+            ({"original_language": "ko"}, "日韩电影"),
+            ({"original_language": "en"}, "欧美电影"),
+            ({}, "其他电影"),
+        ]
+
+        for tmdb_data, expected in movie_cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(_classify_movie_library_category(tmdb_data), expected)
+
     def test_common_episode_update_formats_are_cleaned_and_detected(self):
         cases = {
             "师兄啊师兄 HQ 高码率 更至EP145": "师兄啊师兄",
@@ -492,11 +560,11 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
             "名称：【原盘】赌侠 (1990) 1080P REMUX 国粤多音轨 中字外挂字幕",
             account,
             {"task_settings": {"telegram_inbox_media_root": "影视库"}},
-            FakeTMDB(movie={"id": 624, "title": "赌侠", "release_date": "1990-12-13"}),
+            FakeTMDB(movie={"id": 624, "title": "赌侠", "release_date": "1990-12-13", "original_language": "zh"}),
         )
         self.assertEqual(movie_task["taskname"], "赌侠")
         self.assertEqual(movie_task["content_type"], "movie")
-        self.assertEqual(movie_task["savepath"], "影视库/电影/赌侠 (1990)")
+        self.assertEqual(movie_task["savepath"], "影视库/电影/华语电影/赌侠 (1990)")
 
         cang_task = build_media_task_from_share(
             "https://pan.quark.cn/s/cang",
@@ -510,12 +578,12 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
             },
             FakeTMDB(
                 tv={"id": 1001, "name": "沧月星澜", "first_air_date": "2026-01-01"},
-                details={"id": 1001, "name": "沧月星澜", "first_air_date": "2026-01-01", "last_episode_to_air": {"season_number": 1}},
+                details={"id": 1001, "name": "沧月星澜", "first_air_date": "2026-01-01", "origin_country": ["CN"], "last_episode_to_air": {"season_number": 1}},
             ),
         )
         self.assertEqual(cang_task["taskname"], "沧月星澜")
         self.assertEqual(cang_task["content_type"], "tv")
-        self.assertEqual(cang_task["savepath"], "影视库/电视剧/沧月星澜/Season 01")
+        self.assertEqual(cang_task["savepath"], "影视库/电视剧/国产剧/沧月星澜/Season 01")
 
         tazhan_task = build_media_task_from_share(
             "https://pan.quark.cn/s/tazhan",
@@ -529,12 +597,12 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
             },
             FakeTMDB(
                 tv={"id": 1002, "name": "她战", "first_air_date": "2026-01-01"},
-                details={"id": 1002, "name": "她战", "first_air_date": "2026-01-01", "last_episode_to_air": {"season_number": 1}},
+                details={"id": 1002, "name": "她战", "first_air_date": "2026-01-01", "origin_country": ["CN"], "last_episode_to_air": {"season_number": 1}},
             ),
         )
         self.assertEqual(tazhan_task["taskname"], "她战")
         self.assertEqual(tazhan_task["content_type"], "tv")
-        self.assertEqual(tazhan_task["savepath"], "影视库/电视剧/她战/Season 01")
+        self.assertEqual(tazhan_task["savepath"], "影视库/电视剧/国产剧/她战/Season 01")
 
     def test_service_skips_duplicate_share_and_does_not_run(self):
         account = FakeAccount({"dup": [{"file_name": "阿基拉.mkv", "dir": False, "fid": "f1"}]})

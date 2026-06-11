@@ -226,12 +226,40 @@ def _tmdb_origin_countries(*items: Optional[Dict[str, Any]]) -> set:
     return countries
 
 
+def _tmdb_production_countries(*items: Optional[Dict[str, Any]]) -> set:
+    countries = set()
+    for item in items:
+        if not item:
+            continue
+        for value in item.get("production_countries") or []:
+            if isinstance(value, dict):
+                value = value.get("iso_3166_1")
+            if value:
+                countries.add(str(value).upper())
+    return countries
+
+
 def _tmdb_original_language(*items: Optional[Dict[str, Any]]) -> str:
     for item in items:
         value = str((item or {}).get("original_language") or "").strip().lower()
         if value:
             return value
     return ""
+
+
+def _classify_movie_library_category(tmdb_data: Optional[Dict[str, Any]]) -> str:
+    genres = _tmdb_genre_ids(tmdb_data)
+    language = _tmdb_original_language(tmdb_data)
+
+    if "16" in genres:
+        return "动画电影"
+    if language in {"zh", "cn", "bo", "za"}:
+        return "华语电影"
+    if language in {"ja", "ko"}:
+        return "日韩电影"
+    if language in {"en", "fr", "de", "es", "it", "pt", "nl", "ru"}:
+        return "欧美电影"
+    return "其他电影"
 
 
 def _classify_tv_library_category(seed: str, files: List[Dict[str, Any]], tmdb_data: Optional[Dict[str, Any]], content_type: str) -> str:
@@ -247,6 +275,8 @@ def _classify_tv_library_category(seed: str, files: List[Dict[str, Any]], tmdb_d
         return "日番"
     if "99" in genres:
         return "纪录片"
+    if "10762" in genres:
+        return "儿童"
     if genres & {"10764", "10767"}:
         return "综艺"
     if countries & {"CN", "TW", "HK"}:
@@ -259,7 +289,7 @@ def _classify_tv_library_category(seed: str, files: List[Dict[str, Any]], tmdb_d
         return "国漫"
     if is_animation:
         return "动漫"
-    return ""
+    return "未分类"
 
 
 def _select_latest_season(details: Optional[Dict[str, Any]]) -> Optional[int]:
@@ -314,6 +344,8 @@ def _telegram_inbox_root_save_path(settings: Dict[str, Any], content_type: str, 
 
     if content_type == "movie":
         folder = f"{title} ({year})" if year else title
+        if library_category:
+            return _normalize_media_save_path(f"{root}/电影/{library_category}/{folder}")
         return _normalize_media_save_path(f"{root}/{category}/{folder}")
 
     if content_type in {"tv", "anime"} and library_category:
@@ -506,10 +538,11 @@ def build_media_task_from_share(
 
     title = str((movie_match or {}).get("title") or _remove_season_from_title(query) or fallback_title).strip()
     year = _tmdb_year(movie_match, "movie") or year_seed
+    library_category = _classify_movie_library_category(movie_match)
     settings = _task_settings(config_data)
     pattern = str(settings.get("movie_naming_pattern") or "")
     replace_template = str(settings.get("movie_naming_replace") or "")
-    savepath = _telegram_inbox_root_save_path(settings, "movie", title, year, 1)
+    savepath = _telegram_inbox_root_save_path(settings, "movie", title, year, 1, library_category)
     task = {
         "taskname": title,
         "shareurl": shareurl,
@@ -528,8 +561,9 @@ def build_media_task_from_share(
         "episode_naming": "",
         "ignore_extension": False,
         "content_type": "movie",
+        "library_category": library_category,
         "calendar_info": {
-            "extracted": {"show_name": title, "year": year, "content_type": "movie"},
+            "extracted": {"show_name": title, "year": year, "content_type": "movie", "library_category": library_category},
             "match": {
                 "matched_show_name": title,
                 "matched_year": year,
