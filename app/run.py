@@ -20,7 +20,12 @@ from apscheduler.triggers.date import DateTrigger
 from queue import Queue
 from collections import deque
 from sdk.telegram_channel import TelegramChannelCache
-from sdk.telegram_inbox import TelegramAutoCreateService, TelegramInboxPoller, repair_media_library_task
+from sdk.telegram_inbox import (
+    TelegramAutoCreateService,
+    TelegramInboxPoller,
+    repair_media_library_task,
+    repair_media_library_tasks,
+)
 from datetime import timedelta, datetime
 import copy
 import subprocess
@@ -2683,7 +2688,10 @@ def update():
 def run_script_now():
     if not is_login():
         return jsonify({"success": False, "message": "未登录"})
-    tasklist = request.json.get("tasklist", [])
+    tasklist = copy.deepcopy(request.json.get("tasklist", []))
+    repaired = repair_media_library_tasklist_for_run(tasklist)
+    if repaired:
+        logging.info(f">>> 运行前已修正 {repaired} 个媒体库任务路径")
     command = [PYTHON_PATH, "-u", SCRIPT_PATH, CONFIG_PATH]
     logging.info(
         f">>> 开始执行手动运行任务 [{tasklist[0].get('taskname') if len(tasklist)>0 else 'ALL'}]"
@@ -2763,15 +2771,58 @@ _telegram_inbox_thread = None
 _telegram_inbox_lock = Lock()
 
 
+def _tmdb_service_for_media_repair():
+    try:
+        tmdb_api_key = str(config_data.get("tmdb_api_key") or "").strip() if isinstance(config_data, dict) else ""
+        if not tmdb_api_key:
+            return None
+        return TMDBService(tmdb_api_key, get_poster_language_setting())
+    except Exception:
+        return None
+
+
+def repair_media_library_tasks_in_config(write=False, reason="") -> int:
+    """Repair old media-library paths in config, such as missing 国漫 category."""
+    try:
+        tmdb_service = _tmdb_service_for_media_repair()
+        repaired = repair_media_library_tasks(config_data, tmdb_service) if tmdb_service else 0
+        if repaired:
+            if write:
+                Config.write_json(CONFIG_PATH, config_data)
+            suffix = f"（{reason}）" if reason else ""
+            logging.info(f">>> 已修正 {repaired} 个媒体库任务路径{suffix}")
+        return repaired
+    except Exception as exc:
+        logging.warning(f">>> 修正媒体库任务路径失败: {exc}")
+        return 0
+
+
+def repair_media_library_tasklist_for_run(tasklist) -> int:
+    """Repair task snapshots coming from the Web UI before launching the worker."""
+    try:
+        if not tasklist:
+            return 0
+        tmdb_service = _tmdb_service_for_media_repair()
+        if not tmdb_service:
+            return 0
+        temp_config = {
+            "task_settings": (config_data.get("task_settings") or {}) if isinstance(config_data, dict) else {},
+            "tasklist": tasklist,
+        }
+        return repair_media_library_tasks(temp_config, tmdb_service)
+    except Exception as exc:
+        logging.warning(f">>> 运行前修正媒体库任务路径失败: {exc}")
+        return 0
+
+
 def run_telegram_inbox_task_now(task, original_index=None):
     """Run one Telegram-created task in the background, ignoring schedule rules."""
     if not isinstance(task, dict):
         return
     task = copy.deepcopy(task)
     try:
-        tmdb_api_key = str(config_data.get("tmdb_api_key") or "").strip() if isinstance(config_data, dict) else ""
-        if tmdb_api_key:
-            tmdb_service = TMDBService(tmdb_api_key, get_poster_language_setting())
+        tmdb_service = _tmdb_service_for_media_repair()
+        if tmdb_service:
             if repair_media_library_task(task, config_data, tmdb_service):
                 logging.info(f">>> Telegram 自动创建任务已修正媒体库路径: {task.get('taskname', '')} -> {task.get('savepath', '')}")
         try:
@@ -2844,6 +2895,7 @@ def run_telegram_inbox_task_now(task, original_index=None):
 def _save_telegram_inbox_task_config(data):
     global config_data
     config_data = data
+    repair_media_library_tasks_in_config(write=False, reason="telegram_auto_create")
     Config.write_json(CONFIG_PATH, config_data)
     try:
         notify_calendar_changed("telegram_inbox_task_created")
@@ -3174,6 +3226,11 @@ def sync_task_config_with_database_bindings() -> bool:
                     changed = True
                     synced_count += 1
                     logging.debug(f"统一 TMDB 匹配信息（以数据库为准） - 任务: '{task_name}', 原配置: {config_tmdb_id}, 数据库: {db_tmdb_id}, 节目: '{show.get('name', '')}'")
+
+        repaired_count = repair_media_library_tasks_in_config(write=False, reason="sync")
+        if repaired_count:
+            changed = True
+            synced_count += repaired_count
         
         if changed:
             logging.debug(f"TMDB 匹配信息双向同步完成，共同步了 {synced_count} 个任务")
@@ -4576,6 +4633,7 @@ def init():
         if isinstance(task, dict):
             task["addition"] = {}
     ensure_push_config_defaults(config_data)
+    repair_media_library_tasks_in_config(write=False, reason="startup")
 
     # 同步更新任务的插件配置
     sync_task_plugins_config()

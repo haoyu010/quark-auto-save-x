@@ -591,6 +591,11 @@ def _search_best_movie(tmdb_service: Any, query: str, year: str) -> Optional[Dic
         best = _pick_best_movie_match(query, year, results)
         if best:
             return best
+        if year:
+            results = _safe_tmdb_call(tmdb_service.search_movie_all, query, None) or []
+            best = _pick_best_movie_match(query, year, results)
+            if best:
+                return best
     return _safe_tmdb_call(tmdb_service.search_movie, query, year or None)
 
 
@@ -602,6 +607,11 @@ def _search_best_tv_show(tmdb_service: Any, query: str, year: str, season: int) 
         best = _pick_best_tv_match(query, year, season, results)
         if best:
             return best
+        if year:
+            results = _safe_tmdb_call(tmdb_service.search_tv_show_all, query, None) or []
+            best = _pick_best_tv_match(query, year, season, results)
+            if best:
+                return best
     return _safe_tmdb_call(tmdb_service.search_tv_show, query, year or None)
 
 
@@ -776,12 +786,19 @@ def repair_media_library_task(task: Dict[str, Any], config_data: Optional[Dict[s
         return False
     config_data = config_data or {}
     settings = _task_settings(config_data)
-    if not _normalize_media_save_path(str(settings.get("telegram_inbox_media_root") or "")):
+    root = _normalize_media_save_path(str(settings.get("telegram_inbox_media_root") or ""))
+    if not root:
+        return False
+    current_savepath = _normalize_media_save_path(str(task.get("savepath") or ""))
+    if current_savepath and current_savepath != root and not current_savepath.startswith(root + "/"):
         return False
 
     cal = task.get("calendar_info") or {}
     match = cal.get("match") or {}
     extracted = cal.get("extracted") or {}
+    existing_category = str(task.get("library_category") or extracted.get("library_category") or "").strip()
+    if existing_category and f"/{existing_category}/" in f"/{current_savepath}/":
+        return False
     tmdb_id = match.get("tmdb_id")
     try:
         tmdb_id = int(tmdb_id or 0)
@@ -868,6 +885,17 @@ def repair_media_library_task(task: Dict[str, Any], config_data: Optional[Dict[s
         "episode_naming": task.get("episode_naming"),
     }
     return before != after
+
+
+def repair_media_library_tasks(config_data: Optional[Dict[str, Any]] = None, tmdb_service: Any = None) -> int:
+    """Repair all existing Telegram media-library tasks in config."""
+    if not isinstance(config_data, dict) or not tmdb_service:
+        return 0
+    repaired = 0
+    for task in config_data.get("tasklist", []) or []:
+        if isinstance(task, dict) and repair_media_library_task(task, config_data, tmdb_service):
+            repaired += 1
+    return repaired
 
 
 def _message_chat_id(message: Dict[str, Any]) -> str:

@@ -13,6 +13,7 @@ from app.sdk.telegram_inbox import (
     extract_title_seed,
     is_authorized_message,
     repair_media_library_task,
+    repair_media_library_tasks,
 )
 
 
@@ -903,6 +904,119 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(task["episode_naming"], "逆天邪神 - S01E[]")
         self.assertEqual(task["calendar_info"]["extracted"]["content_type"], "anime")
         self.assertEqual(task["calendar_info"]["extracted"]["library_category"], "国漫")
+
+    def test_repair_media_library_tasks_rewrites_existing_config_tasks(self):
+        config = {
+            "task_settings": {
+                "telegram_inbox_media_root": "影视库",
+                "tv_naming_rule": "剧名 - S季数E[]",
+            },
+            "tasklist": [{
+                "taskname": "逆天邪神",
+                "shareurl": "https://pan.quark.cn/s/nitian",
+                "savepath": "影视库/电视剧/逆天邪神/Season 01",
+                "pattern": "逆天邪神 - S01E[]",
+                "episode_naming": "逆天邪神 - S01E[]",
+                "content_type": "tv",
+                "library_category": "",
+                "calendar_info": {
+                    "extracted": {
+                        "show_name": "逆天邪神",
+                        "year": "2023",
+                        "content_type": "tv",
+                        "library_category": "",
+                        "season_number": 1,
+                    },
+                    "match": {
+                        "matched_show_name": "逆天邪神",
+                        "matched_year": "2023",
+                        "tmdb_id": 235643,
+                        "latest_season_number": 1,
+                        "latest_season_fetch_url": "/tv/235643/season/1",
+                    },
+                },
+            }],
+        }
+
+        changed = repair_media_library_tasks(
+            config,
+            FakeTMDB(
+                details_by_id={
+                    235643: {
+                        "id": 235643,
+                        "name": "逆天邪神",
+                        "first_air_date": "2023-09-23",
+                        "origin_country": ["CN"],
+                        "original_language": "zh",
+                        "genres": [{"id": 16, "name": "Animation"}],
+                        "last_episode_to_air": {"season_number": 1},
+                    }
+                }
+            ),
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(config["tasklist"][0]["savepath"], "影视库/电视剧/国漫/逆天邪神/Season 01")
+        self.assertEqual(config["tasklist"][0]["content_type"], "anime")
+        self.assertEqual(config["tasklist"][0]["library_category"], "国漫")
+
+    def test_series_tmdb_match_retries_without_misleading_year_for_category(self):
+        class YearSensitiveTMDB(FakeTMDB):
+            def __init__(self):
+                super().__init__(
+                    tv_results=[{
+                        "id": 235643,
+                        "name": "逆天邪神",
+                        "first_air_date": "2023-09-23",
+                        "genre_ids": [16, 10759, 10765],
+                        "origin_country": ["CN"],
+                        "original_language": "zh",
+                    }],
+                    details_by_id={
+                        235643: {
+                            "id": 235643,
+                            "name": "逆天邪神",
+                            "first_air_date": "2023-09-23",
+                            "origin_country": ["CN"],
+                            "original_language": "zh",
+                            "genres": [{"id": 16, "name": "Animation"}],
+                            "last_episode_to_air": {"season_number": 1},
+                        }
+                    },
+                )
+                self.calls = []
+
+            def search_tv_show_all(self, query, year=None):
+                self.calls.append(("all", query, year))
+                if year:
+                    return []
+                return self.tv_results
+
+            def search_tv_show(self, query, year=None):
+                self.calls.append(("one", query, year))
+                if year:
+                    return None
+                return self.tv_results[0]
+
+        tmdb = YearSensitiveTMDB()
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/nitian",
+            "逆天邪神 (2026) S01E41 https://pan.quark.cn/s/nitian",
+            FakeAccount({"nitian": [{"file_name": "S01E41.mp4", "dir": False, "fid": "f1"}]}),
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                }
+            },
+            tmdb,
+        )
+
+        self.assertIn(("all", "逆天邪神", "2026"), tmdb.calls)
+        self.assertIn(("all", "逆天邪神", None), tmdb.calls)
+        self.assertEqual(task["savepath"], "影视库/电视剧/国漫/逆天邪神/Season 01")
+        self.assertEqual(task["content_type"], "anime")
+        self.assertEqual(task["library_category"], "国漫")
 
     def test_extract_title_seed_ignores_url_noise(self):
         self.assertEqual(

@@ -73,6 +73,8 @@ class TMDBService:
             
         if params is None:
             params = {}
+        else:
+            params = dict(params)
             
         params.update({
             'api_key': self.api_key,
@@ -90,18 +92,33 @@ class TMDBService:
         except Exception:
             pass
 
+        def _cache_result(value):
+            try:
+                self._cache[cache_key] = (_now(), value)
+            except Exception:
+                pass
+
+        def _is_not_found(exc):
+            response = getattr(exc, "response", None)
+            try:
+                return int(getattr(response, "status_code", 0) or 0) == 404
+            except Exception:
+                return False
+
         # 尝试主地址
         try:
             url = f"{self.current_url}{endpoint}"
             response = self.session.get(url, params=params, timeout=self.request_timeout)
             response.raise_for_status()
             data = response.json()
-            try:
-                self._cache[cache_key] = (_now(), data)
-            except Exception:
-                pass
+            _cache_result(data)
             return data
         except Exception as e:
+            if _is_not_found(e):
+                logger.debug(f"TMDB资源不存在，跳过备用地址: {endpoint}")
+                self.current_url = self.primary_url
+                _cache_result(None)
+                return None
             logger.debug(f"TMDB主地址请求失败: {e}")
             
             # 如果当前使用的是主地址，尝试切换到备用地址
@@ -114,12 +131,14 @@ class TMDBService:
                     response.raise_for_status()
                     logger.debug("TMDB备用地址连接成功")
                     data = response.json()
-                    try:
-                        self._cache[cache_key] = (_now(), data)
-                    except Exception:
-                        pass
+                    _cache_result(data)
                     return data
                 except Exception as backup_e:
+                    if _is_not_found(backup_e):
+                        logger.debug(f"TMDB备用地址资源不存在: {endpoint}")
+                        self.current_url = self.primary_url
+                        _cache_result(None)
+                        return None
                     logger.error(f"TMDB备用地址请求也失败: {backup_e}")
                     # 重置回主地址，下次请求时重新尝试
                     self.current_url = self.primary_url
