@@ -1,6 +1,7 @@
 import re
 import time
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any, Callable, Dict, List, Optional
 
 import requests
@@ -42,6 +43,27 @@ MEDIA_TASK_DEFAULTS = {
     "movie_naming_replace": "片名 (年份).\\2",
     "tv_naming_rule": "剧名 - S季数E[]",
     "tv_ignore_extension": True,
+}
+
+DEFAULT_LIBRARY_CATEGORY_RULES = {
+    "movie": [
+        ("动画电影", {"genre_ids": "16"}),
+        ("华语电影", {"original_language": "zh,cn,bo,za"}),
+        ("日韩电影", {"original_language": "ja,ko"}),
+        ("欧美电影", {"original_language": "en,fr,de,es,it,pt,nl,ru"}),
+        ("其他电影", {}),
+    ],
+    "tv": [
+        ("国漫", {"genre_ids": "16", "origin_country": "CN,TW,HK"}),
+        ("日番", {"genre_ids": "16", "origin_country": "JP"}),
+        ("纪录片", {"genre_ids": "99"}),
+        ("儿童", {"genre_ids": "10762"}),
+        ("综艺", {"genre_ids": "10764,10767"}),
+        ("国产剧", {"origin_country": "CN,TW,HK"}),
+        ("欧美剧", {"origin_country": "US,FR,GB,DE,ES,IT,NL,PT,RU,UK"}),
+        ("日韩剧", {"origin_country": "JP,KP,KR,TH,IN,SG"}),
+        ("未分类", {}),
+    ],
 }
 
 
@@ -247,49 +269,106 @@ def _tmdb_original_language(*items: Optional[Dict[str, Any]]) -> str:
     return ""
 
 
-def _classify_movie_library_category(tmdb_data: Optional[Dict[str, Any]]) -> str:
-    genres = _tmdb_genre_ids(tmdb_data)
-    language = _tmdb_original_language(tmdb_data)
+def _tmdb_release_year(media_type: str, *items: Optional[Dict[str, Any]]) -> int:
+    key = "release_date" if media_type == "movie" else "first_air_date"
+    for item in items:
+        year = _year_from_date((item or {}).get(key))
+        if year:
+            return year
+    return 0
 
-    if "16" in genres:
-        return "动画电影"
-    if language in {"zh", "cn", "bo", "za"}:
-        return "华语电影"
-    if language in {"ja", "ko"}:
-        return "日韩电影"
-    if language in {"en", "fr", "de", "es", "it", "pt", "nl", "ru"}:
-        return "欧美电影"
-    return "其他电影"
+
+def _rule_specificity(rule: Dict[str, str]) -> int:
+    return sum(1 for key in ("genre_ids", "original_language", "origin_country", "production_countries", "release_year") if rule.get(key))
+
+
+def _rule_values(value: str) -> List[str]:
+    return [part.strip() for part in str(value or "").split(",") if part.strip()]
+
+
+def _match_rule_values(rule_values: str, actual_values: List[str]) -> bool:
+    actual = {str(value).strip().upper() for value in actual_values if str(value).strip()}
+    matched_positive = False
+    for part in _rule_values(rule_values):
+        if part.startswith("!"):
+            if part[1:].upper() in actual:
+                return False
+            continue
+        if part.upper() in actual:
+            matched_positive = True
+    return matched_positive
+
+
+def _match_rule_value(rule_values: str, actual_value: str) -> bool:
+    actual = str(actual_value or "").strip().lower()
+    return any(part.lower() == actual for part in _rule_values(rule_values))
+
+
+def _match_year_rule(rule_value: str, actual_year: int) -> bool:
+    if not actual_year:
+        return False
+    value = str(rule_value or "").strip()
+    if "-" in value:
+        start, _, end = value.partition("-")
+        try:
+            return int(start) <= actual_year <= int(end)
+        except Exception:
+            return False
+    try:
+        return actual_year == int(value)
+    except Exception:
+        return False
+
+
+def _library_rule_matches(media_type: str, rule: Dict[str, str], tmdb_data: Optional[Dict[str, Any]]) -> bool:
+    if rule.get("genre_ids") and not _match_rule_values(rule["genre_ids"], list(_tmdb_genre_ids(tmdb_data))):
+        return False
+    if rule.get("original_language") and not _match_rule_value(rule["original_language"], _tmdb_original_language(tmdb_data)):
+        return False
+    if rule.get("origin_country") and not _match_rule_values(rule["origin_country"], list(_tmdb_origin_countries(tmdb_data))):
+        return False
+    if rule.get("production_countries") and not _match_rule_values(rule["production_countries"], list(_tmdb_production_countries(tmdb_data))):
+        return False
+    if rule.get("release_year") and not _match_year_rule(rule["release_year"], _tmdb_release_year(media_type, tmdb_data)):
+        return False
+    return True
+
+
+def _classify_library_category(media_type: str, tmdb_data: Optional[Dict[str, Any]]) -> str:
+    rules = DEFAULT_LIBRARY_CATEGORY_RULES.get(media_type)
+    if not rules:
+        return "未分类"
+    ordered = sorted(rules, key=lambda item: -_rule_specificity(item[1]))
+    fallback = ""
+    for name, rule in ordered:
+        if _rule_specificity(rule) == 0:
+            if not fallback:
+                fallback = name
+            continue
+        if _library_rule_matches(media_type, rule, tmdb_data):
+            return name
+    return fallback or "未分类"
+
+
+def _has_library_classification_data(tmdb_data: Optional[Dict[str, Any]]) -> bool:
+    return bool(
+        _tmdb_genre_ids(tmdb_data)
+        or _tmdb_origin_countries(tmdb_data)
+        or _tmdb_original_language(tmdb_data)
+        or _tmdb_production_countries(tmdb_data)
+    )
+
+
+def _classify_movie_library_category(tmdb_data: Optional[Dict[str, Any]]) -> str:
+    if tmdb_data is None:
+        return ""
+    return _classify_library_category("movie", tmdb_data)
 
 
 def _classify_tv_library_category(seed: str, files: List[Dict[str, Any]], tmdb_data: Optional[Dict[str, Any]], content_type: str) -> str:
-    genres = _tmdb_genre_ids(tmdb_data)
-    countries = _tmdb_origin_countries(tmdb_data)
-    language = _tmdb_original_language(tmdb_data)
-    text = " ".join([seed] + _share_file_names(files))
-
-    is_animation = "16" in genres or content_type == "anime"
-    if is_animation and (countries & {"CN", "TW", "HK"} or language in {"zh", "cn", "bo", "za"}):
-        return "国漫"
-    if is_animation and (countries & {"JP"} or language == "ja"):
-        return "日番"
-    if "99" in genres:
-        return "纪录片"
-    if "10762" in genres:
-        return "儿童"
-    if genres & {"10764", "10767"}:
-        return "综艺"
-    if countries & {"CN", "TW", "HK"}:
-        return "国产剧"
-    if countries & {"US", "FR", "GB", "DE", "ES", "IT", "NL", "PT", "RU", "UK"}:
-        return "欧美剧"
-    if countries & {"JP", "KP", "KR", "TH", "IN", "SG"}:
-        return "日韩剧"
-    if is_animation and re.search(r"(国漫|国产|中国|中配|国语)", text):
-        return "国漫"
-    if is_animation:
-        return "动漫"
-    return "未分类"
+    if tmdb_data is None:
+        return ""
+    return _classify_library_category("tv", tmdb_data)
 
 
 def _select_latest_season(details: Optional[Dict[str, Any]]) -> Optional[int]:
@@ -415,6 +494,116 @@ def _safe_tmdb_call(func: Callable, *args):
         return None
 
 
+def _year_from_date(value: Any) -> int:
+    text = str(value or "")
+    if len(text) >= 4 and text[:4].isdigit():
+        return int(text[:4])
+    return 0
+
+
+def _confidence_score(query: str, title: str, original_title: str = "", query_year: Any = "", result_year: int = 0, query_season: int = 0) -> float:
+    query_lower = str(query or "").strip().lower()
+    title_lower = str(title or "").strip().lower()
+    original_lower = str(original_title or "").strip().lower()
+    if not query_lower or not title_lower:
+        return 0.0
+
+    if query_lower == title_lower or (original_lower and query_lower == original_lower):
+        title_score = 100.0
+    elif query_lower in title_lower or (original_lower and query_lower in original_lower):
+        title_score = 80.0
+    elif title_lower in query_lower or (original_lower and original_lower in query_lower):
+        title_score = 70.0
+    else:
+        title_score = SequenceMatcher(None, query_lower, title_lower).ratio() * 100
+        if original_lower and original_lower != title_lower:
+            title_score = max(title_score, SequenceMatcher(None, query_lower, original_lower).ratio() * 100)
+
+    try:
+        query_year_int = int(query_year or 0)
+    except Exception:
+        query_year_int = 0
+    year_score = 70.0
+    if query_year_int > 0 and result_year > 0:
+        diff = abs(result_year - query_year_int)
+        if diff == 0:
+            year_score = 100.0
+        elif diff == 1:
+            year_score = 80.0
+        elif diff == 2:
+            year_score = 50.0
+        else:
+            year_score = 20.0
+    elif query_year_int == 0 and result_year > 0:
+        year_score = 40 + (min(result_year, 2025) - 1970) * 0.0714
+        year_score = min(year_score, 95.0)
+
+    season_score = 90.0 if query_season > 0 else 100.0
+    return (title_score * 0.6 + year_score * 0.3 + season_score * 0.1) / 100.0
+
+
+def _pick_best_tv_match(query: str, year: str, season: int, results: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    best = None
+    best_score = 0.0
+    for item in results or []:
+        if not isinstance(item, dict):
+            continue
+        score = _confidence_score(
+            query,
+            str(item.get("name") or ""),
+            str(item.get("original_name") or ""),
+            year,
+            _year_from_date(item.get("first_air_date")),
+            season,
+        )
+        if score > best_score:
+            best = item
+            best_score = score
+    return best if best is not None and best_score >= 0.6 else None
+
+
+def _pick_best_movie_match(query: str, year: str, results: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    best = None
+    best_score = 0.0
+    for item in results or []:
+        if not isinstance(item, dict):
+            continue
+        score = _confidence_score(
+            query,
+            str(item.get("title") or ""),
+            str(item.get("original_title") or ""),
+            year,
+            _year_from_date(item.get("release_date")),
+            0,
+        )
+        if score > best_score:
+            best = item
+            best_score = score
+    return best if best is not None and best_score >= 0.6 else None
+
+
+def _search_best_movie(tmdb_service: Any, query: str, year: str) -> Optional[Dict[str, Any]]:
+    if not tmdb_service or not query:
+        return None
+    if hasattr(tmdb_service, "search_movie_all"):
+        results = _safe_tmdb_call(tmdb_service.search_movie_all, query, year or None) or []
+        best = _pick_best_movie_match(query, year, results)
+        if best:
+            return best
+    return _safe_tmdb_call(tmdb_service.search_movie, query, year or None)
+
+
+def _search_best_tv_show(tmdb_service: Any, query: str, year: str, season: int) -> Optional[Dict[str, Any]]:
+    if not tmdb_service or not query:
+        return None
+    if hasattr(tmdb_service, "search_tv_show_all"):
+        results = _safe_tmdb_call(tmdb_service.search_tv_show_all, query, year or None) or []
+        best = _pick_best_tv_match(query, year, season, results)
+        if best:
+            return best
+    return _safe_tmdb_call(tmdb_service.search_tv_show, query, year or None)
+
+
 def build_media_task_from_share(
     shareurl: str,
     message_text: str,
@@ -444,12 +633,13 @@ def build_media_task_from_share(
     tv_match = None
     details = None
     if tmdb_service and query:
+        season_hint = _extract_season_number(seed, " ".join(_share_file_names(files))) or 0
         if series_like:
-            tv_match = _safe_tmdb_call(tmdb_service.search_tv_show, query, year_seed or None)
+            tv_match = _search_best_tv_show(tmdb_service, query, year_seed, season_hint)
         else:
-            movie_match = _safe_tmdb_call(tmdb_service.search_movie, query, year_seed or None)
+            movie_match = _search_best_movie(tmdb_service, query, year_seed)
             if not movie_match:
-                tv_match = _safe_tmdb_call(tmdb_service.search_tv_show, query, year_seed or None)
+                tv_match = _search_best_tv_show(tmdb_service, query, year_seed, season_hint)
 
     if tv_match:
         details = _safe_tmdb_call(tmdb_service.get_tv_show_details, tv_match.get("id")) if tmdb_service and tv_match.get("id") else None
@@ -459,7 +649,11 @@ def build_media_task_from_share(
         classification_data = dict(tv_match or {})
         classification_data.update(details or {})
         content_type = "anime" if _is_animation(seed, files, config_data, classification_data) else "tv"
-        library_category = _classify_tv_library_category(seed, files, classification_data, content_type)
+        library_category = (
+            _classify_tv_library_category(seed, files, classification_data, content_type)
+            if _has_library_classification_data(classification_data)
+            else ""
+        )
         settings = _task_settings(config_data)
         naming = _tv_naming_rule(str(settings.get("tv_naming_rule") or ""), title, season)
         savepath = _telegram_inbox_root_save_path(settings, content_type, title, year, season, library_category)

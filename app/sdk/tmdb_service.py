@@ -154,6 +154,18 @@ class TMDBService:
         if result and result.get('results'):
             return result['results'][0]
         return None
+
+    def search_movie_all(self, query: str, year: str = None) -> List[Dict]:
+        """Search movies and return all TMDB candidates for confidence ranking."""
+        params = {'query': query}
+        if year:
+            params['year'] = year
+            params['primary_release_year'] = year
+
+        result = self._make_request('/search/movie', params)
+        if result and result.get('results'):
+            return result['results']
+        return []
     
     def search_tv_show_all(self, query: str, year: str = None) -> List[Dict]:
         """搜索电视剧，返回所有搜索结果"""

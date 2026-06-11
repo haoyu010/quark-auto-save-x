@@ -33,18 +33,33 @@ class FakeAccount:
 
 
 class FakeTMDB:
-    def __init__(self, movie=None, tv=None, details=None):
+    def __init__(self, movie=None, tv=None, details=None, movie_results=None, tv_results=None, details_by_id=None):
         self.movie = movie
         self.tv = tv
+        self.movie_results = movie_results
+        self.tv_results = tv_results
         self.details = details or {}
+        self.details_by_id = details_by_id or {}
 
     def search_movie(self, query, year=None):
         return self.movie
 
+    def search_movie_all(self, query, year=None):
+        if self.movie_results is not None:
+            return self.movie_results
+        return [self.movie] if self.movie else []
+
     def search_tv_show(self, query, year=None):
         return self.tv
 
+    def search_tv_show_all(self, query, year=None):
+        if self.tv_results is not None:
+            return self.tv_results
+        return [self.tv] if self.tv else []
+
     def get_tv_show_details(self, tv_id):
+        if tv_id in self.details_by_id:
+            return self.details_by_id[tv_id]
         return self.details
 
 
@@ -253,6 +268,20 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(task["savepath"], "追更电视剧/南部档案/Season 01")
         self.assertEqual(task["episode_naming"], "南部档案 - S01E[]")
 
+    def test_channel_title_parser_handles_common_release_formats(self):
+        samples = [
+            ("【原盘】赌侠 (1990) 1080P REMUX 国粤多音轨 中字外挂字幕", "赌侠", "1990", False),
+            ("沧月星澜(2026)4K S01E01 - E18 HiveWeb", "沧月星澜", "2026", True),
+            ("她战(2026)4K S01E01 - E16 HiveWeb", "她战", "2026", True),
+            ("师兄啊师兄 HQ 高码率 更至EP145", "师兄啊师兄", "", True),
+        ]
+
+        for raw, title, year, is_series in samples:
+            with self.subTest(raw=raw):
+                self.assertEqual(_clean_media_title(raw), title)
+                self.assertEqual(_extract_year(raw), year)
+                self.assertEqual(_looks_like_series(raw, []), is_series)
+
     def test_media_root_builds_clean_tv_library_path_for_inbox_tasks(self):
         account = FakeAccount({
             "nanbu": [
@@ -358,6 +387,34 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(unknown_task["library_category"], "其他电影")
         self.assertEqual(unknown_task["savepath"], "影视库/电影/其他电影/未知电影 (2024)")
 
+    def test_movie_search_uses_best_tmdb_match_not_first_result(self):
+        account = FakeAccount({
+            "duxia": [
+                {"file_name": "赌侠.1990.1080p.REMUX.mkv", "dir": False, "fid": "f1"},
+            ]
+        })
+        wrong = {"id": 1, "title": "赌神", "release_date": "1989-12-14", "original_language": "zh"}
+        right = {"id": 624, "title": "赌侠", "release_date": "1990-12-13", "original_language": "zh"}
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/duxia",
+            "名称：【原盘】赌侠 (1990) 1080P REMUX 国粤多音轨 中字外挂字幕 https://pan.quark.cn/s/duxia",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "movie_naming_pattern": "^(.*)\\.([^.]+)",
+                    "movie_naming_replace": "片名 (年份).\\2",
+                }
+            },
+            FakeTMDB(movie=wrong, movie_results=[wrong, right]),
+        )
+
+        self.assertEqual(task["taskname"], "赌侠")
+        self.assertEqual(task["library_category"], "华语电影")
+        self.assertEqual(task["savepath"], "影视库/电影/华语电影/赌侠 (1990)")
+        self.assertEqual(task["calendar_info"]["match"]["tmdb_id"], 624)
+
     def test_media_root_builds_anime_season_path_for_inbox_tasks(self):
         account = FakeAccount({
             "doupo": [
@@ -443,6 +500,79 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(task["episode_naming"], "师兄啊师兄 - S01E[]")
         self.assertEqual(task["pattern"], "师兄啊师兄 - S01E[]")
         self.assertEqual(task["replace"], "")
+
+    def test_tv_search_uses_best_tmdb_match_not_first_result(self):
+        account = FakeAccount({
+            "shixiong": [
+                {"file_name": "师兄啊师兄.EP145.mkv", "dir": False, "fid": "f1"},
+            ]
+        })
+        wrong = {"id": 10, "name": "师兄", "first_air_date": "2020-01-01"}
+        right = {
+            "id": 2025,
+            "name": "师兄啊师兄",
+            "first_air_date": "2023-01-19",
+            "genre_ids": [16],
+            "origin_country": ["CN"],
+            "original_language": "zh",
+        }
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/shixiong",
+            "师兄啊师兄 HQ 高码率 更至EP145 https://pan.quark.cn/s/shixiong",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            FakeTMDB(
+                tv=wrong,
+                tv_results=[wrong, right],
+                details_by_id={
+                    2025: {
+                        "id": 2025,
+                        "name": "师兄啊师兄",
+                        "first_air_date": "2023-01-19",
+                        "origin_country": ["CN"],
+                        "original_language": "zh",
+                        "last_episode_to_air": {"season_number": 1},
+                        "genres": [{"id": 16, "name": "Animation"}],
+                    }
+                },
+            ),
+        )
+
+        self.assertEqual(task["content_type"], "anime")
+        self.assertEqual(task["library_category"], "国漫")
+        self.assertEqual(task["savepath"], "影视库/电视剧/国漫/师兄啊师兄/Season 01")
+
+    def test_tmdb_unavailable_does_not_create_uncategorized_folder_for_plain_series(self):
+        account = FakeAccount({
+            "blackmirror": [
+                {"file_name": "黑镜.S07E01.mkv", "dir": False, "fid": "f1"},
+            ]
+        })
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/blackmirror",
+            "黑镜 S07 https://pan.quark.cn/s/blackmirror",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            FakeTMDB(movie=None, tv=None),
+        )
+
+        self.assertEqual(task["content_type"], "tv")
+        self.assertEqual(task["library_category"], "")
+        self.assertEqual(task["savepath"], "影视库/电视剧/黑镜/Season 07")
 
     def test_media_root_keeps_non_chinese_animation_out_of_guoman(self):
         account = FakeAccount({
