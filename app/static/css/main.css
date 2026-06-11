@@ -11448,6 +11448,63 @@ select.form-control {
   margin-top: 16px;
 }
 
+.notify-hub .telegram-inbox-mini {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 52px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(191, 208, 228, 0.9);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 7px 16px rgba(23, 35, 54, 0.05);
+}
+
+.telegram-inbox-copy {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.telegram-inbox-copy i {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #0f766e;
+  background: #e7f7f4;
+}
+
+.telegram-inbox-copy strong,
+.telegram-inbox-copy span {
+  display: block;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.telegram-inbox-copy strong {
+  color: var(--notify-ink);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.telegram-inbox-copy span {
+  margin-top: 2px;
+  color: var(--notify-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.notify-hub .telegram-inbox-switch {
+  transform: scale(0.86);
+  transform-origin: right center;
+}
+
 .notify-hub .notify-primary-btn,
 .notify-hub .notify-secondary-btn,
 .notify-hub .advanced-push-add {
@@ -11567,6 +11624,14 @@ select.form-control {
 
   .notify-hub .notify-primary-btn {
     grid-column: 1 / -1;
+  }
+
+  .notify-hub .telegram-inbox-mini {
+    align-items: flex-start;
+  }
+
+  .telegram-inbox-copy span {
+    font-size: 0.78rem;
   }
 }
 

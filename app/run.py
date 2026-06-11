@@ -20,6 +20,7 @@ from apscheduler.triggers.date import DateTrigger
 from queue import Queue
 from collections import deque
 from sdk.telegram_channel import TelegramChannelCache
+from sdk.telegram_inbox import TelegramAutoCreateService, TelegramInboxPoller
 from datetime import timedelta, datetime
 import subprocess
 import requests
@@ -2329,6 +2330,8 @@ TELEGRAM_PUSH_DEFAULTS = {
     "TG_PROXY_HOST": "",
     "TG_PROXY_PORT": "",
     "TG_PROXY_AUTH": "",
+    "TG_INBOX_AUTO_CREATE": "disabled",
+    "TG_INBOX_LAST_UPDATE_ID": 0,
 }
 
 
@@ -2751,6 +2754,122 @@ def run_script_now():
         stream_with_context(generate_output()),
         content_type="text/event-stream;charset=utf-8",
     )
+
+
+_telegram_inbox_thread = None
+_telegram_inbox_lock = Lock()
+
+
+def run_telegram_inbox_task_now(task, original_index=None):
+    """Run one Telegram-created task in the background, ignoring schedule rules."""
+    if not isinstance(task, dict):
+        return
+    task_name = task.get("taskname") or "Telegram"
+    command = [PYTHON_PATH, "-u", SCRIPT_PATH, CONFIG_PATH]
+
+    def _worker():
+        process_env = os.environ.copy()
+        process_env["PYTHONIOENCODING"] = "utf-8"
+        process_env["TASKLIST"] = json.dumps([task], ensure_ascii=False)
+        process_env["IGNORE_EXECUTION_RULES"] = "1"
+        if original_index is not None:
+            process_env["ORIGINAL_TASK_INDEX"] = str(original_index)
+
+        logging.info(f">>> Telegram 自动创建任务 [{task_name}] 已开始转存")
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            env=process_env,
+        )
+        try:
+            for line in iter(process.stdout.readline, ""):
+                stripped_line = line.strip()
+                if stripped_line:
+                    logging.info(stripped_line)
+            process.stdout.close()
+            process.wait()
+            if process.returncode == 0:
+                logging.info(f">>> Telegram 自动创建任务 [{task_name}] 转存执行成功")
+                try:
+                    notify_calendar_changed("telegram_inbox_task_completed")
+                except Exception:
+                    pass
+            else:
+                logging.warning(f">>> Telegram 自动创建任务 [{task_name}] 转存结束，返回码: {process.returncode}")
+        except Exception as e:
+            logging.warning(f">>> Telegram 自动创建任务 [{task_name}] 转存异常: {e}")
+        finally:
+            try:
+                if process.stdout and not process.stdout.closed:
+                    process.stdout.close()
+            except Exception:
+                pass
+
+    Thread(target=_worker, daemon=True).start()
+
+
+def _save_telegram_inbox_task_config(data):
+    global config_data
+    config_data = data
+    Config.write_json(CONFIG_PATH, config_data)
+    try:
+        notify_calendar_changed("telegram_inbox_task_created")
+    except Exception:
+        pass
+    try:
+        Thread(target=process_new_tasks_async, daemon=True).start()
+    except Exception:
+        pass
+
+
+def _save_telegram_inbox_state(data):
+    global config_data
+    config_data = data
+    Config.write_json(CONFIG_PATH, config_data)
+
+
+def _create_telegram_inbox_service(current_config):
+    def _account_factory():
+        cookies = current_config.get("cookie") or []
+        if not cookies:
+            raise RuntimeError("未配置夸克 Cookie，无法自动转存")
+        return Quark(cookies[0], 0)
+
+    def _tmdb_factory():
+        tmdb_api_key = str(current_config.get("tmdb_api_key") or "").strip()
+        if not tmdb_api_key:
+            return None
+        return TMDBService(tmdb_api_key, get_poster_language_setting())
+
+    return TelegramAutoCreateService(
+        current_config,
+        account_factory=_account_factory,
+        tmdb_factory=_tmdb_factory,
+        save_config=_save_telegram_inbox_task_config,
+        run_task=run_telegram_inbox_task_now,
+        logger=logging.info,
+    )
+
+
+def start_telegram_inbox_worker():
+    global _telegram_inbox_thread
+    with _telegram_inbox_lock:
+        if _telegram_inbox_thread and _telegram_inbox_thread.is_alive():
+            return
+        poller = TelegramInboxPoller(
+            config_getter=lambda: config_data,
+            service_factory=_create_telegram_inbox_service,
+            state_saver=_save_telegram_inbox_state,
+            logger=logging.info,
+        )
+        _telegram_inbox_thread = Thread(target=poller.run_forever, daemon=True)
+        _telegram_inbox_thread.start()
+        logging.info(">>> Telegram 自动收链监听线程已启动")
 
 
 @app.route("/api/runtime_logs")
@@ -9504,5 +9623,9 @@ if __name__ == "__main__":
     except Exception:
         pass
     # 初始化全局db对象，确保所有接口可用
+    try:
+        start_telegram_inbox_worker()
+    except Exception as e:
+        logging.warning(f"Telegram 自动收链监听启动失败: {e}")
     record_db = RecordDB()
     app.run(debug=DEBUG, host="0.0.0.0", port=PORT)

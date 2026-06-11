@@ -623,6 +623,20 @@
                       </button>
                     </div>
 
+                    <div class="telegram-inbox-mini">
+                      <div class="telegram-inbox-copy">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                        <div>
+                          <strong>自动收链</strong>
+                          <span>给 bot 发送夸克链接后，自动建任务并立刻转存</span>
+                        </div>
+                      </div>
+                      <label class="notify-switch telegram-inbox-switch" title="启用 Telegram 自动收链">
+                        <input type="checkbox" :checked="isTelegramInboxEnabled()" @change="setTelegramInboxEnabled($event.target.checked)">
+                        <span></span>
+                      </label>
+                    </div>
+
                     <div class="collapse telegram-proxy-collapse" id="telegramProxySettings">
                       <div class="telegram-form-grid telegram-proxy-grid">
                         <label class="notify-field">
@@ -3465,7 +3479,9 @@
           'TG_API_HOST',
           'TG_PROXY_HOST',
           'TG_PROXY_PORT',
-          'TG_PROXY_AUTH'
+          'TG_PROXY_AUTH',
+          'TG_INBOX_AUTO_CREATE',
+          'TG_INBOX_LAST_UPDATE_ID'
         ],
         pageWidthMode: 'medium', // 页面宽度模式：narrow, medium, wide
         configHasLoaded: false,
@@ -3478,7 +3494,9 @@
             TG_API_HOST: '',
             TG_PROXY_HOST: '',
             TG_PROXY_PORT: '',
-            TG_PROXY_AUTH: ''
+            TG_PROXY_AUTH: '',
+            TG_INBOX_AUTO_CREATE: 'disabled',
+            TG_INBOX_LAST_UPDATE_ID: 0
           },
           push_notify_type: 'full',
           tasklist: [],
@@ -9596,7 +9614,9 @@
             TG_API_HOST: '',
             TG_PROXY_HOST: '',
             TG_PROXY_PORT: '',
-            TG_PROXY_AUTH: ''
+            TG_PROXY_AUTH: '',
+            TG_INBOX_AUTO_CREATE: 'disabled',
+            TG_INBOX_LAST_UPDATE_ID: 0
           };
           Object.keys(defaults).forEach(key => {
             if (configTarget.push_config[key] === undefined || configTarget.push_config[key] === null) {
@@ -9690,6 +9710,14 @@
         setTelegramEnabled(enabled) {
           this.ensureTelegramPushConfig();
           this.$set(this.formData.push_config, 'TG_ENABLED', enabled ? 'enabled' : 'disabled');
+        },
+        isTelegramInboxEnabled() {
+          const push = (this.formData && this.formData.push_config) || {};
+          return String(push.TG_INBOX_AUTO_CREATE || '').toLowerCase() === 'enabled';
+        },
+        setTelegramInboxEnabled(enabled) {
+          this.ensureTelegramPushConfig();
+          this.$set(this.formData.push_config, 'TG_INBOX_AUTO_CREATE', enabled ? 'enabled' : 'disabled');
         },
         toggleTelegramToken() {
           this.showTelegramToken = !this.showTelegramToken;

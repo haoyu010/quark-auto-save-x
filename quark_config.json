@@ -4,6 +4,15 @@
   ],
   "push_config": {
     "QUARK_SIGN_NOTIFY": true,
+    "TG_ENABLED": "disabled",
+    "TG_BOT_TOKEN": "",
+    "TG_USER_ID": "",
+    "TG_API_HOST": "",
+    "TG_PROXY_HOST": "",
+    "TG_PROXY_PORT": "",
+    "TG_PROXY_AUTH": "",
+    "TG_INBOX_AUTO_CREATE": "disabled",
+    "TG_INBOX_LAST_UPDATE_ID": 0,
     "其他推送渠道//此项可删": "配置方法同青龙"
   },
   "magic_regex": {

@@ -27,6 +27,14 @@ class TelegramConfigDefaultsTest(unittest.TestCase):
 
         self.assertEqual(push_config["TG_ENABLED"], "disabled")
 
+    def test_telegram_inbox_auto_create_defaults_to_disabled(self):
+        data = {"push_config": {"TG_BOT_TOKEN": "token", "TG_USER_ID": "42"}}
+
+        push_config = ensure_push_config_defaults(data)
+
+        self.assertEqual(push_config["TG_INBOX_AUTO_CREATE"], "disabled")
+        self.assertEqual(push_config["TG_INBOX_LAST_UPDATE_ID"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
