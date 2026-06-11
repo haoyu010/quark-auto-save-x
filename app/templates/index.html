@@ -1417,7 +1417,7 @@
                     <div class="col-sm-10">
                       <div class="input-group">
                         <input type="text" name="taskname[]" class="form-control" v-model="task.taskname" placeholder="必填" @focus="smart_param.showSuggestions=true;focusTaskname(task.__originalIndex !== undefined ? task.__originalIndex : index, task)" @input="changeTaskname(task.__originalIndex !== undefined ? task.__originalIndex : index, task)">
-                        <div class="dropdown-menu show task-suggestions" v-if="smart_param.showSuggestions && smart_param.index === (task.__originalIndex !== undefined ? task.__originalIndex : index) && (smart_param.taskSuggestions.success || smart_param.isSearching)">
+                        <div class="dropdown-menu show task-suggestions" v-if="smart_param.showSuggestions && smart_param.index === (task.__originalIndex !== undefined ? task.__originalIndex : index) && (smart_param.taskSuggestions.success || smart_param.isSearching || smart_param.taskSuggestions.message || smart_param.taskSuggestions.error)">
                           <div class="dropdown-item text-muted" v-if="smart_param.isSearching" style="font-size:14px; padding: 0 8px; text-align: left;">
                             <span v-if="smart_param.validating">
                               <i class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></i> 
@@ -3058,7 +3058,7 @@
                 <div class="col-sm-10">
                   <div class="input-group">
                     <input type="text" name="taskname[]" class="form-control" v-model="createTask.taskData.taskname" placeholder="必填" @focus="smart_param.showSuggestions=true;focusTaskname(-1, createTask.taskData)" @input="changeTaskname(-1, createTask.taskData)">
-                    <div class="dropdown-menu show task-suggestions" v-if="smart_param.showSuggestions && smart_param.index === -1 && (smart_param.taskSuggestions.success || smart_param.isSearching)">
+                    <div class="dropdown-menu show task-suggestions" v-if="smart_param.showSuggestions && smart_param.index === -1 && (smart_param.taskSuggestions.success || smart_param.isSearching || smart_param.taskSuggestions.message || smart_param.taskSuggestions.error)">
                       <div class="dropdown-item text-muted" v-if="smart_param.isSearching" style="font-size:14px; padding: 0 8px; text-align: left;">
                         <span v-if="smart_param.validating">
                           <i class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></i>
@@ -11110,13 +11110,21 @@
                 this.smart_param.validating = false; // 重置验证状态
               }
             }).catch(error => {
+              this.smart_param.taskSuggestions = {
+                success: true,
+                data: [],
+                message: `资源搜索请求失败：${(error && error.message) ? error.message : '网络异常'}`
+              };
+              this.smart_param.showSuggestions = true;
               this.smart_param.isSearching = false;
               this.smart_param.validating = false; // 重置验证状态
-              
+
             });
           } catch (e) {
             this.smart_param.taskSuggestions = {
-              error: "网络异常"
+              success: true,
+              data: [],
+              message: "资源搜索异常，请稍后重试"
             };
             this.smart_param.isSearching = false;
             this.smart_param.validating = false; // 重置验证状态
@@ -11313,11 +11321,19 @@
           validResults.sort((a, b) => getItemTs(b) - getItemTs(a));
           
           // 更新搜索结果
+          const originalCount = (searchData.data || []).length;
+          let finalMessage = searchData.message;
+          if (validResults.length === 0) {
+            finalMessage = originalCount > 0
+              ? `已找到${originalCount}条候选，但验证后全部失效或文件夹为空；请重新索引 Telegram 来源，或检查代理/频道配置`
+              : (searchData.message || "未找到有效的分享链接");
+          }
+
           const result = {
             success: searchData.success,
             source: searchData.source,
             data: validResults,
-            message: validResults.length === 0 ? "未找到有效的分享链接" : searchData.message
+            message: finalMessage
           };
           
           

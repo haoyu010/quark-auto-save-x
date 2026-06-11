@@ -3112,6 +3112,47 @@ def ensure_calendar_info_for_tasks() -> bool:
     return changed
 
 
+def _normalize_task_suggestions_payload(payload):
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        data = payload.get("data")
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            nested_data = data.get("data")
+            if isinstance(nested_data, list):
+                return nested_data
+        results = payload.get("results")
+        if isinstance(results, list):
+            return results
+    return []
+
+
+def _fetch_public_task_suggestions(search_query, deep):
+    base_url = base64.b64decode("aHR0cHM6Ly9zLjkxNzc4OC54eXo=").decode()
+    response = requests.get(
+        f"{base_url}/task_suggestions",
+        params={"q": search_query, "d": deep},
+        timeout=12,
+    )
+    response.raise_for_status()
+    return _normalize_task_suggestions_payload(response.json())
+
+
+def _build_empty_task_suggestions_message(search_query, providers=None, telegram_error="", fallback_error=""):
+    provider_text = "、".join(providers or []) or "Telegram"
+    message = f"未找到“{search_query}”的有效资源，已搜索 {provider_text}"
+    details = []
+    if telegram_error:
+        details.append(f"Telegram 搜索异常：{telegram_error}")
+    if fallback_error:
+        details.append(f"备用搜索失败：{fallback_error}")
+    if details:
+        message += "；" + "；".join(details)
+    return message
+
+
 @app.route("/task_suggestions")
 def get_task_suggestions():
     if not is_login():
@@ -3158,17 +3199,21 @@ def get_task_suggestions():
 
         merged = []
         providers = []
+        telegram_error = ""
 
         try:
             tg = TelegramChannelCache(tg_data)
             if tg.enabled:
+                providers.append("Telegram")
                 if deep in ["1", "true", "yes"]:
-                    tg.index_channels(deep=True)
+                    index_result = tg.index_channels(deep=True)
+                    if isinstance(index_result, dict) and not index_result.get("success", True):
+                        telegram_error = index_result.get("message", "")
                 else:
                     tg.ensure_fresh()
                 merged.extend(tg.search(search_query))
-                providers.append("Telegram")
         except Exception as e:
+            telegram_error = str(e)
             logging.warning(f"Telegram 搜索失败: {str(e)}")
 
         # 去重并统一时间字段为 publish_date
@@ -3408,17 +3453,43 @@ def get_task_suggestions():
             })
 
         # 若无本地可用来源，回退到公开网络
-        base_url = base64.b64decode("aHR0cHM6Ly9zLjkxNzc4OC54eXo=").decode()
-        url = f"{base_url}/task_suggestions?q={search_query}&d={deep}"
-        response = requests.get(url)
+        try:
+            public_results = _fetch_public_task_suggestions(search_query, deep)
+        except Exception as fallback_exc:
+            fallback_error = str(fallback_exc)
+            logging.warning(f"公开资源搜索失败: {fallback_error}")
+            return jsonify({
+                "success": True,
+                "source": ", ".join(providers) if providers else "聚合",
+                "data": [],
+                "message": _build_empty_task_suggestions_message(
+                    search_query,
+                    providers=providers,
+                    telegram_error=telegram_error,
+                    fallback_error=fallback_error,
+                ),
+            })
+
+        if not public_results:
+            return jsonify({
+                "success": True,
+                "source": "网络公开",
+                "data": [],
+                "message": _build_empty_task_suggestions_message(
+                    search_query,
+                    providers=[*providers, "网络公开"],
+                    telegram_error=telegram_error,
+                ),
+            })
+
         return jsonify({
             "success": True,
             "source": "网络公开",
-            "data": response.json()
+            "data": public_results
         })
 
     except Exception as e:
-        return jsonify({"success": True, "message": f"error: {str(e)}"})
+        return jsonify({"success": True, "data": [], "message": f"资源搜索异常: {str(e)}"})
 
 
 def _resolve_qoark_redirect(url: str) -> str:
