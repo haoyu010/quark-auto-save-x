@@ -100,6 +100,9 @@ def _file_filter_text(file):
     ]
     return " ".join(str(part) for part in parts if part).lower()
 
+def identifier_startswith(identifier, prefix):
+    return str(identifier or "").startswith(prefix)
+
 def get_media_exclude_keywords(config_data=None):
     task_settings = (config_data or CONFIG_DATA or {}).get("task_settings", {}) or {}
     if "media_exclude_keywords" in task_settings:
@@ -6891,7 +6894,7 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
                     dir_name = dir_node.tag.lstrip("📁")
                     
                     # 检查是否是解压文件夹的虚拟目录节点（以 extracted_dir_ 开头）
-                    if dir_node.identifier.startswith("extracted_dir_"):
+                    if identifier_startswith(dir_node.identifier, "extracted_dir_"):
                         current_added_dirs.add(dir_name)
                         has_update_in_subdir = True
                     # 检查是否是指定的更新目录
@@ -6914,7 +6917,7 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
                         continue
                     
                     # 1. 检查是否是解压文件夹的虚拟节点（以 extracted_ 开头）
-                    if node.identifier.startswith("extracted_"):
+                    if identifier_startswith(node.identifier, "extracted_"):
                         is_new_file = True
                     
                     # 2. 检查是否在当前转存的文件列表中
@@ -7011,7 +7014,7 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
                         is_new_file = False
                         
                         # 1. 检查是否是解压文件夹的虚拟节点（以 extracted_ 开头）
-                        if file_node.identifier.startswith("extracted_"):
+                        if identifier_startswith(file_node.identifier, "extracted_"):
                             is_new_file = True
                         
                         # 2. 检查是否在当前转存的文件列表中

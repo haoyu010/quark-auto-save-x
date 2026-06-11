@@ -9,7 +9,10 @@ from .telegram_channel import extract_quark_links, normalize_bool, normalize_int
 
 
 VIDEO_EXT_RE = re.compile(r"\.(mkv|mp4|avi|mov|ts|m2ts|wmv|flv|webm|rmvb)$", re.I)
-EPISODE_RE = re.compile(r"(?:[Ss]\d{1,2}[Ee]\d{1,3}|(?:第\s*)?[0-9一二三四五六七八九十零〇两]+\s*[集话話期])")
+EPISODE_RE = re.compile(
+    r"(?:[Ss]\d{1,2}[Ee]\d{1,4}|(?<![A-Za-z0-9])(?:EP|E)[\s._-]*\d{1,4}(?![A-Za-z0-9])|(?:第\s*)?[0-9一二三四五六七八九十零〇两]+\s*[集话話期])",
+    re.I,
+)
 SEASON_RE = re.compile(
     r"(?:[Ss](\d{1,2})(?!\d)|Season\s*(\d{1,2})|第\s*([0-9一二三四五六七八九十零〇两]+)\s*季|(\d{1,2})\s*季)",
     re.I,
@@ -110,7 +113,7 @@ def _extract_year(*texts: str) -> str:
 
 
 def _strip_extension(name: str) -> str:
-    return re.sub(r"\.[A-Za-z0-9]{2,5}$", "", str(name or "")).strip()
+    return re.sub(r"\.(mkv|mp4|avi|mov|ts|m2ts|wmv|flv|webm|rmvb|srt|ass|ssa|zip|rar|7z)$", "", str(name or ""), flags=re.I).strip()
 
 
 def _clean_media_title(value: str) -> str:
@@ -118,9 +121,9 @@ def _clean_media_title(value: str) -> str:
     text = re.sub(r"[\._]+", " ", text)
     text = re.sub(r"^(?:资源|片名|剧名|名称|标题)\s*[:：]\s*", " ", text)
     text = re.sub(r"[\(（【\[]\s*(?:19|20)\d{2}\s*[\)）】\]]", " ", text)
-    text = re.sub(r"(?:首更|更至|更新至|更新|已更|连载至|全)\s*\d+\s*(?:集|话|話|期|回)?", " ", text, flags=re.I)
+    text = re.sub(r"(?:首更|更至|更新至|更新|已更|连载至|全)\s*(?:第\s*)?(?:EP|E)?[\s._-]*\d+\s*(?:集|话|話|期|回)?", " ", text, flags=re.I)
     text = re.sub(r"\[[^\]]+\]|\([^)]*(?:1080|2160|720|字幕|国语|中字|GB|MP4|MKV)[^)]*\)", " ", text, flags=re.I)
-    text = re.sub(r"\b(4K|8K|2160p|1080p|720p|WEB[- ]?DL|BluRay|H\.?264|H\.?265|x265|x264|AAC|DDP?\d?\.?\d?|HDR|DV|(?:8|10|12)[- ]?bit|\d{2,3}\s*FPS)\b", " ", text, flags=re.I)
+    text = re.sub(r"\b(4K|8K|2160p|1080p|720p|WEB[- ]?DL|BluRay|H\.?264|H\.?265|x265|x264|AAC|DDP?\d?\.?\d?|HDR|DV|HQ|(?:8|10|12)[- ]?bit|\d{2,3}\s*FPS)\b|\d{2,3}\s*帧|高码率|高码|高帧率", " ", text, flags=re.I)
     text = EPISODE_RE.sub(" ", text)
     text = SEASON_RE.sub(" ", text)
     text = re.sub(r"(19\d{2}|20\d{2})", " ", text)

@@ -5,6 +5,7 @@ from app.sdk.telegram_inbox import (
     TelegramAutoCreateService,
     TelegramInboxPoller,
     _clean_media_title,
+    _looks_like_series,
     build_media_task_from_share,
     extract_title_seed,
     is_authorized_message,
@@ -348,6 +349,65 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(task["taskname"], "斗破苍穹")
         self.assertEqual(task["content_type"], "anime")
         self.assertEqual(task["savepath"], "影视剧/动漫/斗破苍穹/Season 05")
+
+    def test_episode_update_quality_words_build_anime_task_not_movie(self):
+        self.assertEqual(
+            _clean_media_title("师兄啊师兄 HQ 高码率 更至EP145"),
+            "师兄啊师兄",
+        )
+
+        account = FakeAccount({
+            "shixiong": [
+                {"file_name": "师兄啊师兄.EP145.mkv", "dir": False, "fid": "f1"},
+            ]
+        })
+        tmdb = FakeTMDB(
+            tv={"id": 2025, "name": "师兄啊师兄", "first_air_date": "2023-01-19"},
+            details={
+                "id": 2025,
+                "name": "师兄啊师兄",
+                "first_air_date": "2023-01-19",
+                "last_episode_to_air": {"season_number": 1},
+                "genres": [{"id": 16, "name": "Animation"}],
+                "seasons": [{"season_number": 1, "episode_count": 145}],
+            },
+        )
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/shixiong",
+            "师兄啊师兄 HQ 高码率 更至EP145 https://pan.quark.cn/s/shixiong",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            tmdb,
+        )
+
+        self.assertEqual(task["taskname"], "师兄啊师兄")
+        self.assertEqual(task["content_type"], "anime")
+        self.assertEqual(task["savepath"], "影视库/动漫/师兄啊师兄/Season 01")
+        self.assertEqual(task["episode_naming"], "师兄啊师兄 - S01E[]")
+        self.assertEqual(task["pattern"], "师兄啊师兄 - S01E[]")
+        self.assertEqual(task["replace"], "")
+
+    def test_common_episode_update_formats_are_cleaned_and_detected(self):
+        cases = {
+            "师兄啊师兄 HQ 高码率 更至EP145": "师兄啊师兄",
+            "师兄啊师兄 HQ 高码率 更至EP.145": "师兄啊师兄",
+            "师兄啊师兄 4K 60帧 E145": "师兄啊师兄",
+            "凡人修仙传 更新至第145话": "凡人修仙传",
+            "凡人修仙传 更新至 145集": "凡人修仙传",
+            "遮天 第145集 2160p 高码": "遮天",
+        }
+
+        for raw, expected in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(_clean_media_title(raw), expected)
+                self.assertTrue(_looks_like_series(raw, [{"file_name": f"{raw}.mkv", "dir": False}]))
 
     def test_service_skips_duplicate_share_and_does_not_run(self):
         account = FakeAccount({"dup": [{"file_name": "阿基拉.mkv", "dir": False, "fid": "f1"}]})
