@@ -529,6 +529,15 @@ def _remove_season_from_title(seed: str) -> str:
     return _compact_text(SEASON_RE.sub(" ", seed or "")).strip(" -_|:：，,。")
 
 
+def _normalize_tv_title(title: str, season: int = 0) -> str:
+    text = str(title or "").strip()
+    if season > 0:
+        base = _remove_season_from_title(text)
+        if base:
+            return base
+    return text
+
+
 def _tmdb_year(result: Optional[Dict[str, Any]], media_type: str) -> str:
     if not result:
         return ""
@@ -584,14 +593,48 @@ def _confidence_score(query: str, title: str, original_title: str = "", query_ye
         else:
             year_score = 20.0
     elif query_year_int == 0 and result_year > 0:
-        year_score = 40 + (min(result_year, 2025) - 1970) * 0.0714
-        year_score = min(year_score, 95.0)
+        year_score = 90.0
+    elif query_year_int == 0 and result_year <= 0:
+        year_score = 50.0
 
     season_score = 90.0 if query_season > 0 else 100.0
     return (title_score * 0.6 + year_score * 0.3 + season_score * 0.1) / 100.0
 
 
 def _pick_best_tv_match(query: str, year: str, season: int, results: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if season > 0:
+        season_best = None
+        season_best_score = 0.0
+        query_base = _normalize_tv_title(query, season).lower()
+        for item in results or []:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("name") or "")
+            original_title = str(item.get("original_name") or "")
+            item_season = _extract_season_number(title, original_title) or 0
+            if item_season != season:
+                continue
+            item_base = _normalize_tv_title(title or original_title, season).lower()
+            if not item_base or not query_base:
+                continue
+            if not (query_base == item_base or query_base in item_base or item_base in query_base):
+                continue
+            score = _confidence_score(
+                query_base,
+                item_base,
+                _normalize_tv_title(original_title, season),
+                year,
+                _year_from_date(item.get("first_air_date")),
+                season,
+            )
+            if "16" in _tmdb_genre_ids(item):
+                score += 0.08
+            if score > season_best_score:
+                season_best = item
+                season_best_score = score
+        if season_best is not None and season_best_score >= 0.6:
+            return season_best
+
     best = None
     best_score = 0.0
     for item in results or []:
@@ -702,9 +745,9 @@ def build_media_task_from_share(
 
     if tv_match:
         details = _safe_tmdb_call(tmdb_service.get_tv_show_details, tv_match.get("id")) if tmdb_service and tv_match.get("id") else None
-        title = str((details or {}).get("name") or tv_match.get("name") or query or fallback_title).strip()
         year = _tmdb_year(details or tv_match, "tv") or year_seed
         season = _extract_season_number(seed, " ".join(_share_file_names(files))) or _select_latest_season(details) or 1
+        title = _normalize_tv_title(str((details or {}).get("name") or tv_match.get("name") or query or fallback_title).strip(), season)
         classification_data = dict(tv_match or {})
         classification_data.update(details or {})
         content_type = "anime" if _is_animation(seed, files, config_data, classification_data) else "tv"
@@ -750,8 +793,8 @@ def build_media_task_from_share(
         return task
 
     if series_like:
-        title = _remove_season_from_title(query) or _clean_media_title(fallback_title) or seed
         season = _extract_season_number(seed, " ".join(_share_file_names(files))) or 1
+        title = _normalize_tv_title(query, season) or _clean_media_title(fallback_title) or seed
         content_type = "anime" if _is_animation(seed, files, config_data, None) else "tv"
         library_category = _classify_tv_library_category(seed, files, None, content_type)
         settings = _task_settings(config_data)
@@ -789,7 +832,7 @@ def build_media_task_from_share(
             },
         }
 
-    title = str((movie_match or {}).get("title") or _remove_season_from_title(query) or fallback_title).strip()
+    title = str((movie_match or {}).get("title") or _normalize_tv_title(query, 1) or fallback_title).strip()
     year = _tmdb_year(movie_match, "movie") or year_seed
     library_category = _classify_movie_library_category(movie_match)
     settings = _task_settings(config_data)
@@ -874,6 +917,7 @@ def repair_media_library_task(task: Dict[str, Any], config_data: Optional[Dict[s
         season = 1
     if season <= 0:
         season = 1
+    title = _normalize_tv_title(title, season)
 
     content_type = "anime" if _is_animation(title, [], config_data, classification_data) else "tv"
     library_category = (

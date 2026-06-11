@@ -575,6 +575,89 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(task["library_category"], "国漫")
         self.assertEqual(task["savepath"], "影视库/电视剧/国漫/师兄啊师兄/Season 01")
 
+    def test_tv_search_prefers_animated_biaoren_over_undated_placeholder(self):
+        account = FakeAccount({
+            "biaoren": [
+                {"file_name": "1 4K.mp4", "dir": False, "fid": "f1"},
+                {"file_name": "2 4K.mp4", "dir": False, "fid": "f2"},
+            ]
+        })
+        placeholder = {
+            "id": 265215,
+            "name": "镖人",
+            "first_air_date": "",
+            "genre_ids": [18, 10759],
+            "origin_country": ["CN"],
+            "original_language": "zh",
+        }
+        animated = {
+            "id": 107463,
+            "name": "镖人",
+            "first_air_date": "2023-06-01",
+            "genre_ids": [16, 10759],
+            "origin_country": ["CN", "JP"],
+            "original_language": "zh",
+        }
+        season_two = {
+            "id": 325228,
+            "name": "镖人 第二季",
+            "first_air_date": "",
+            "genre_ids": [16, 10759],
+            "origin_country": ["CN"],
+            "original_language": "zh",
+        }
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/biaoren",
+            "\u9556\u4eba S02 https://pan.quark.cn/s/biaoren",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            FakeTMDB(
+                tv=placeholder,
+                tv_results=[placeholder, animated, season_two],
+                details_by_id={
+                    107463: {
+                        "id": 107463,
+                        "name": "镖人",
+                        "first_air_date": "2023-06-01",
+                        "origin_country": ["CN", "JP"],
+                        "original_language": "zh",
+                        "last_episode_to_air": {"season_number": 1},
+                        "genres": [{"id": 16, "name": "动画"}, {"id": 10759, "name": "动作冒险"}],
+                    },
+                    265215: {
+                        "id": 265215,
+                        "name": "镖人",
+                        "first_air_date": "",
+                        "origin_country": ["CN"],
+                        "original_language": "zh",
+                        "genres": [{"id": 18, "name": "剧情"}, {"id": 10759, "name": "动作冒险"}],
+                    },
+                    325228: {
+                        "id": 325228,
+                        "name": "镖人 第二季",
+                        "first_air_date": "",
+                        "origin_country": ["CN"],
+                        "original_language": "zh",
+                        "genres": [{"id": 16, "name": "动画"}, {"id": 10759, "name": "动作冒险"}],
+                        "seasons": [{"season_number": 2, "episode_count": 2, "air_date": "2026-06-11"}],
+                    },
+                },
+            ),
+        )
+
+        self.assertEqual(task["taskname"], "镖人")
+        self.assertEqual(task["content_type"], "anime")
+        self.assertEqual(task["library_category"], "国漫")
+        self.assertEqual(task["savepath"], "影视库/电视剧/国漫/镖人/Season 02")
+        self.assertEqual(task["calendar_info"]["match"]["tmdb_id"], 325228)
+
     def test_tmdb_unavailable_does_not_create_uncategorized_folder_for_plain_series(self):
         account = FakeAccount({
             "blackmirror": [
