@@ -118,8 +118,10 @@ def _extract_season_number(*texts: str) -> Optional[int]:
 
 def _extract_year(*texts: str) -> str:
     for text in texts:
-        match = re.search(r"(19\d{2}|20\d{2})", str(text or ""))
-        if match:
+        value = str(text or "")
+        for match in re.finditer(r"(19\d{2}|20\d{2})", value):
+            if re.match(r"\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日", value[match.end():]):
+                continue
             return match.group(1)
     return ""
 
@@ -141,6 +143,8 @@ def _clean_media_title(value: str) -> str:
     text = re.sub(r"[\._]+", " ", text)
     text = re.sub(r"^(?:资源|片名|剧名|名称|标题)\s*[:：]\s*", " ", text)
     text = RELEASE_BRACKET_TAG_RE.sub(" ", text)
+    text = re.sub(r"^(?:19|20)\d{2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日\s*", " ", text)
+    text = re.sub(r"^(.+?)[\(（【\[]\s*(?:19|20)\d{2}\s*[\)）】\]].*$", r"\1", text)
     text = re.sub(r"[\(（【\[]\s*(?:19|20)\d{2}\s*[\)）】\]]", " ", text)
     text = _drop_release_metadata_tail(text)
     text = re.sub(r"(?:首更|更至|更新至|更新|已更|连载至|全)\s*(?:第\s*)?(?:EP|E)?[\s._-]*\d+\s*(?:集|话|話|期|回)?", " ", text, flags=re.I)

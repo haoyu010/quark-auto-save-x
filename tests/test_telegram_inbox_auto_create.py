@@ -5,6 +5,7 @@ from app.sdk.telegram_inbox import (
     TelegramAutoCreateService,
     TelegramInboxPoller,
     _clean_media_title,
+    _extract_year,
     _looks_like_series,
     build_media_task_from_share,
     extract_title_seed,
@@ -414,12 +415,21 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
             "名称：【原盘】赌侠 (1990) 1080P REMUX 国粤多音轨 中字外挂字幕": "赌侠",
             "名称：沧月星澜(2026)4K S01E01 - E18 HiveWeb": "沧月星澜",
             "名称：她战(2026)4K S01E01 - E16 HiveWeb": "她战",
+            "名称：翘楚 (2026)剧情 陈都灵 4KHQHDR60FPS 更新15集": "翘楚",
+            "名称：神墓(2022) 4K 帧享 更新至年番S03E46 HiveWeb": "神墓",
         }
 
         for raw, expected in cases.items():
             with self.subTest(raw=raw):
                 seed = extract_title_seed(raw)
                 self.assertEqual(_clean_media_title(seed), expected)
+
+    def test_calendar_catalog_date_is_not_treated_as_media_year(self):
+        seed = extract_title_seed("名称：2026年6月11日 短剧更新目录8")
+
+        self.assertEqual(_clean_media_title(seed), "短剧更新目录8")
+        self.assertEqual(_extract_year(seed), "")
+        self.assertFalse(_looks_like_series(seed, [{"file_name": seed, "dir": True}]))
 
     def test_release_metadata_samples_build_expected_library_tasks(self):
         account = FakeAccount({
