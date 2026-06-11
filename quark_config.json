@@ -28,6 +28,7 @@
   "task_settings": {
     "auto_replace_invalid_shareurl": "enabled",
     "auto_replace_min_score": 85,
+    "telegram_inbox_media_root": "",
     "auto_replace_sources": [
       "telegram"
     ]

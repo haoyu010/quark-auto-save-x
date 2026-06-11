@@ -2282,6 +2282,7 @@ def get_data():
     data["task_settings"].setdefault("auto_replace_invalid_shareurl", "enabled")
     data["task_settings"].setdefault("auto_replace_min_score", 85)
     data["task_settings"].setdefault("media_exclude_keywords", DEFAULT_MEDIA_EXCLUDE_KEYWORDS)
+    data["task_settings"].setdefault("telegram_inbox_media_root", "")
     data["task_settings"]["auto_replace_sources"] = ["telegram"]
 
     # 发送webui信息，但不发送密码原文
@@ -2468,6 +2469,7 @@ def update():
     config_data["source"] = {"telegram": source_cfg.get("telegram", {})}
     config_data.setdefault("task_settings", {})
     config_data["task_settings"].setdefault("media_exclude_keywords", DEFAULT_MEDIA_EXCLUDE_KEYWORDS)
+    config_data["task_settings"].setdefault("telegram_inbox_media_root", "")
     config_data["task_settings"]["auto_replace_sources"] = ["telegram"]
     for task in config_data.get("tasklist", []) or []:
         if isinstance(task, dict):

@@ -4,6 +4,7 @@ import unittest
 from app.sdk.telegram_inbox import (
     TelegramAutoCreateService,
     TelegramInboxPoller,
+    _clean_media_title,
     build_media_task_from_share,
     extract_title_seed,
     is_authorized_message,
@@ -198,6 +199,155 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
 
         self.assertEqual(task["content_type"], "tv")
         self.assertEqual(task["savepath"], "追更/追更剧集/黑镜/Season 07")
+
+    def test_channel_caption_quality_words_do_not_pollute_task_name(self):
+        self.assertEqual(
+            _clean_media_title("名称: 南部档案（2026）4K 10bit 60FPS 首更06集"),
+            "南部档案",
+        )
+
+        account = FakeAccount({
+            "nanbu": [
+                {"file_name": "南部档案.S01E06.mkv", "dir": False, "fid": "f1"},
+            ]
+        })
+        tmdb = FakeTMDB(
+            tv={"id": 321, "name": "南部档案", "first_air_date": "2026-01-01"},
+            details={
+                "id": 321,
+                "name": "南部档案",
+                "first_air_date": "2026-01-01",
+                "last_episode_to_air": {"season_number": 1},
+                "seasons": [{"season_number": 1, "episode_count": 6}],
+            },
+        )
+        caption = """名称: 南部档案（2026）4K 10bit 60FPS 首更06集
+描述: 民国初年，南洋海上发生水鬼望乡离奇命案
+夸克: https://pan.quark.cn/s/nanbu"""
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/nanbu",
+            caption,
+            account,
+            {
+                "task_settings": {
+                    "tv_save_path": "追更电视剧/剧名/Season 季数",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            tmdb,
+        )
+
+        self.assertEqual(task["taskname"], "南部档案")
+        self.assertEqual(task["savepath"], "追更电视剧/南部档案/Season 01")
+        self.assertEqual(task["episode_naming"], "南部档案 - S01E[]")
+
+    def test_media_root_builds_clean_tv_library_path_for_inbox_tasks(self):
+        account = FakeAccount({
+            "nanbu": [
+                {"file_name": "南部档案.S01E06.mkv", "dir": False, "fid": "f1"},
+            ]
+        })
+        tmdb = FakeTMDB(
+            tv={"id": 321, "name": "南部档案", "first_air_date": "2026-01-01"},
+            details={
+                "id": 321,
+                "name": "南部档案",
+                "first_air_date": "2026-01-01",
+                "last_episode_to_air": {"season_number": 1},
+                "seasons": [{"season_number": 1, "episode_count": 6}],
+            },
+        )
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/nanbu",
+            "名称: 南部档案（2026）4K 10bit 60FPS 首更06集\nhttps://pan.quark.cn/s/nanbu",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视剧",
+                    "tv_save_path": "旧模板/剧名/Season 季数",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            tmdb,
+        )
+
+        self.assertEqual(task["taskname"], "南部档案")
+        self.assertEqual(task["content_type"], "tv")
+        self.assertEqual(task["savepath"], "影视剧/电视剧/南部档案/Season 01")
+        self.assertEqual(task["episode_naming"], "南部档案 - S01E[]")
+
+    def test_media_root_builds_movie_library_path_for_inbox_tasks(self):
+        account = FakeAccount({
+            "akira": [
+                {"file_name": "阿基拉.1988.1080p.mkv", "dir": False, "fid": "f1"},
+            ]
+        })
+        tmdb = FakeTMDB(movie={
+            "id": 149,
+            "title": "阿基拉",
+            "release_date": "1988-07-16",
+        })
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/akira",
+            "名称: 阿基拉（1988） 4K https://pan.quark.cn/s/akira",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视剧",
+                    "movie_save_path": "旧电影模板/片名 (年份)",
+                    "movie_naming_pattern": "^(.*)\\.([^.]+)",
+                    "movie_naming_replace": "片名 (年份).\\2",
+                }
+            },
+            tmdb,
+        )
+
+        self.assertEqual(task["taskname"], "阿基拉")
+        self.assertEqual(task["content_type"], "movie")
+        self.assertEqual(task["savepath"], "影视剧/电影/阿基拉 (1988)")
+
+    def test_media_root_builds_anime_season_path_for_inbox_tasks(self):
+        account = FakeAccount({
+            "doupo": [
+                {"file_name": "斗破苍穹.S05E01.mkv", "dir": False, "fid": "f1"},
+                {"file_name": "斗破苍穹.S05E02.mkv", "dir": False, "fid": "f2"},
+            ]
+        })
+        tmdb = FakeTMDB(
+            tv={"id": 999, "name": "斗破苍穹", "first_air_date": "2017-01-07"},
+            details={
+                "id": 999,
+                "name": "斗破苍穹",
+                "first_air_date": "2017-01-07",
+                "last_episode_to_air": {"season_number": 5},
+                "genres": [{"id": 16, "name": "Animation"}],
+                "seasons": [{"season_number": 5, "episode_count": 104}],
+            },
+        )
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/doupo",
+            "斗破苍穹 第五季 https://pan.quark.cn/s/doupo",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视剧",
+                    "anime_save_path": "旧动漫模板/剧名/Season 季数",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            tmdb,
+        )
+
+        self.assertEqual(task["taskname"], "斗破苍穹")
+        self.assertEqual(task["content_type"], "anime")
+        self.assertEqual(task["savepath"], "影视剧/动漫/斗破苍穹/Season 05")
 
     def test_service_skips_duplicate_share_and_does_not_run(self):
         account = FakeAccount({"dup": [{"file_name": "阿基拉.mkv", "dir": False, "fid": "f1"}]})

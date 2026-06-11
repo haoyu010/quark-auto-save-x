@@ -840,6 +840,18 @@
             <div class="form-group">
               <div class="input-group">
                 <div class="input-group-prepend">
+                  <span class="input-group-text">自动收链根目录</span>
+                </div>
+                <input type="text" class="form-control" v-model="formData.task_settings.telegram_inbox_media_root" placeholder="影视剧" title="Telegram 自动收链创建任务时使用的固定根目录；配置后会自动生成 电影/片名 (年份)、电视剧/剧名/Season 01、动漫/剧名/Season 01 等规范路径">
+                <div class="input-group-append">
+                  <button type="button" class="btn btn-outline-secondary" @click="showTelegramInboxRootSelect()" title="选择自动收链根目录"><i class="bi bi-folder"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="input-group">
+                <div class="input-group-prepend">
                   <span class="input-group-text">电影保存路径</span>
                 </div>
                 <input type="text" class="form-control" v-model="formData.task_settings.movie_save_path" placeholder="电影目录前缀/片名 (年份)" title="设置电影类型内容的默认保存路径格式，在影视发现页面创建电影任务时自动填充。支持变量：片名、年份">
@@ -3504,6 +3516,7 @@
           episode_patterns: [],
           tv_show_keywords: [],
           task_settings: {
+            telegram_inbox_media_root: "",
             movie_save_path: "电影目录前缀/片名 (年份)",
             tv_save_path: "剧集目录前缀/剧名/Season 季数",
             anime_save_path: "动画目录前缀/剧名/Season 季数",
@@ -9305,6 +9318,7 @@
               // 确保任务设置存在
               if (!config_data.task_settings) {
                 config_data.task_settings = {
+                  telegram_inbox_media_root: "",
                   movie_save_path: "电影目录前缀/片名 (年份)",
                   tv_save_path: "剧集目录前缀/剧名/Season 季数",
                   anime_save_path: "动画目录前缀/剧名/Season 季数",
@@ -9348,6 +9362,9 @@
                   config_data.task_settings[key] = rule.current;
                 }
               });
+              if (config_data.task_settings.telegram_inbox_media_root === undefined) {
+                config_data.task_settings.telegram_inbox_media_root = "";
+              }
               // 确保电影命名规则字段存在，只在字段不存在时设置默认值，允许用户设置为空字符串
               if (config_data.task_settings.movie_naming_pattern === undefined) {
                 config_data.task_settings.movie_naming_pattern = "^(.*)\\.([^.]+)";
@@ -11763,6 +11780,30 @@
             this.getSavepathDetail(savepath);
           }
         },
+        showTelegramInboxRootSelect() {
+          if (!this.formData.task_settings || typeof this.formData.task_settings !== 'object') {
+            this.$set(this.formData, 'task_settings', {});
+          }
+          this.fileSelect.selectShare = false;
+          this.fileSelect.selectDir = true;
+          this.fileSelect.previewRegex = false;
+          this.fileSelect.error = undefined;
+          this.fileSelect.fileList = [];
+          this.fileSelect.paths = [];
+          this.fileSelect.index = -2;
+          this.fileSelect.sortBy = "updated_at";
+          this.fileSelect.sortOrder = "desc";
+
+          document.getElementById('fileSelectModal').setAttribute('data-modal-type', 'telegram-inbox-root');
+          $('#fileSelectModal').modal('toggle');
+
+          const rootPath = String(this.formData.task_settings.telegram_inbox_media_root || '').trim();
+          if (rootPath) {
+            this.getSavepathDetail(rootPath);
+          } else {
+            this.getSavepathDetail(0);
+          }
+        },
         getShareDetail(retryCount = 0, maxRetries = 1) {
           // 切换或重试前清理残留错误提示，避免覆盖新资源展示
           this.fileSelect.error = undefined;
@@ -12067,7 +12108,14 @@
             }
           } else {
             // 检查index是否有效
-            if (this.fileSelect.index === -1) {
+            const modalType = document.getElementById('fileSelectModal').getAttribute('data-modal-type');
+            if (modalType === 'telegram-inbox-root') {
+              const selectedPath = this.fileSelect.paths.map(item => item.name).join("/");
+              if (!this.formData.task_settings || typeof this.formData.task_settings !== 'object') {
+                this.$set(this.formData, 'task_settings', {});
+              }
+              this.$set(this.formData.task_settings, "telegram_inbox_media_root", selectedPath);
+            } else if (this.fileSelect.index === -1) {
               // 创建任务模态框的情况
               this.createTask.taskData.savepath = this.fileSelect.paths.map(item => item.name).join("/");
               if (addTaskname) {

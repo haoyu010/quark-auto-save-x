@@ -16,6 +16,7 @@ SEASON_RE = re.compile(
 )
 
 MEDIA_TASK_DEFAULTS = {
+    "telegram_inbox_media_root": "",
     "movie_save_path": "电影目录前缀/片名 (年份)",
     "tv_save_path": "剧集目录前缀/剧名/Season 季数",
     "anime_save_path": "动画目录前缀/剧名/Season 季数",
@@ -115,13 +116,18 @@ def _strip_extension(name: str) -> str:
 def _clean_media_title(value: str) -> str:
     text = _strip_extension(value)
     text = re.sub(r"[\._]+", " ", text)
+    text = re.sub(r"^(?:资源|片名|剧名|名称|标题)\s*[:：]\s*", " ", text)
+    text = re.sub(r"[\(（【\[]\s*(?:19|20)\d{2}\s*[\)）】\]]", " ", text)
+    text = re.sub(r"(?:首更|更至|更新至|更新|已更|连载至|全)\s*\d+\s*(?:集|话|話|期|回)?", " ", text, flags=re.I)
     text = re.sub(r"\[[^\]]+\]|\([^)]*(?:1080|2160|720|字幕|国语|中字|GB|MP4|MKV)[^)]*\)", " ", text, flags=re.I)
-    text = re.sub(r"\b(4K|8K|2160p|1080p|720p|WEB[- ]?DL|BluRay|H\.?264|H\.?265|x265|x264|AAC|DDP?\d?\.?\d?|HDR|DV)\b", " ", text, flags=re.I)
+    text = re.sub(r"\b(4K|8K|2160p|1080p|720p|WEB[- ]?DL|BluRay|H\.?264|H\.?265|x265|x264|AAC|DDP?\d?\.?\d?|HDR|DV|(?:8|10|12)[- ]?bit|\d{2,3}\s*FPS)\b", " ", text, flags=re.I)
     text = EPISODE_RE.sub(" ", text)
     text = SEASON_RE.sub(" ", text)
     text = re.sub(r"(19\d{2}|20\d{2})", " ", text)
     text = re.sub(r"^(电影|电视剧|剧集|动漫|动画|国漫|番剧)\s+", " ", text)
     text = re.sub(r"\s+(电影|电视剧|剧集|动漫|动画|国漫|番剧)$", " ", text)
+    text = re.sub(r"[\(（【\[]\s*[\)）】\]]", " ", text)
+    text = re.sub(r"\b(?:首更|更至|更新至|更新|已更|连载至)\b", " ", text, flags=re.I)
     return _compact_text(text).strip(" -_|:：，,。")
 
 
@@ -199,6 +205,26 @@ def _task_settings(config_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def _normalize_media_save_path(path: str) -> str:
     return re.sub(r"/{2,}", "/", str(path or "").replace("\\", "/")).strip().strip("/")
+
+
+def _telegram_inbox_root_save_path(settings: Dict[str, Any], content_type: str, title: str, year: str = "", season: int = 1) -> str:
+    root = _normalize_media_save_path(str((settings or {}).get("telegram_inbox_media_root") or ""))
+    if not root:
+        return ""
+
+    category = {
+        "movie": "电影",
+        "tv": "电视剧",
+        "anime": "动漫",
+        "variety": "综艺",
+        "documentary": "纪录片",
+    }.get(content_type, "电影")
+
+    if content_type == "movie":
+        folder = f"{title} ({year})" if year else title
+        return _normalize_media_save_path(f"{root}/{category}/{folder}")
+
+    return _normalize_media_save_path(f"{root}/{category}/{title}/Season {int(season or 1):02d}")
 
 
 def _template_for_type(content_type: str, settings: Dict[str, Any]) -> str:
@@ -306,10 +332,11 @@ def build_media_task_from_share(
         content_type = "anime" if _is_animation(seed, files, config_data, details) else "tv"
         settings = _task_settings(config_data)
         naming = _tv_naming_rule(str(settings.get("tv_naming_rule") or ""), title, season)
+        savepath = _telegram_inbox_root_save_path(settings, content_type, title, year, season)
         task = {
             "taskname": title,
             "shareurl": shareurl,
-            "savepath": _tv_save_path(_template_for_type(content_type, settings), title, year, season),
+            "savepath": savepath or _tv_save_path(_template_for_type(content_type, settings), title, year, season),
             "pattern": naming,
             "replace": "",
             "enddate": "",
@@ -344,10 +371,11 @@ def build_media_task_from_share(
         content_type = "anime" if _is_animation(seed, files, config_data, None) else "tv"
         settings = _task_settings(config_data)
         naming = _tv_naming_rule(str(settings.get("tv_naming_rule") or ""), title, season)
+        savepath = _telegram_inbox_root_save_path(settings, content_type, title, year_seed, season)
         return {
             "taskname": title,
             "shareurl": shareurl,
-            "savepath": _tv_save_path(_template_for_type(content_type, settings), title, year_seed, season),
+            "savepath": savepath or _tv_save_path(_template_for_type(content_type, settings), title, year_seed, season),
             "pattern": naming,
             "replace": "",
             "enddate": "",
@@ -380,10 +408,11 @@ def build_media_task_from_share(
     settings = _task_settings(config_data)
     pattern = str(settings.get("movie_naming_pattern") or "")
     replace_template = str(settings.get("movie_naming_replace") or "")
+    savepath = _telegram_inbox_root_save_path(settings, "movie", title, year, 1)
     task = {
         "taskname": title,
         "shareurl": shareurl,
-        "savepath": _movie_save_path(_template_for_type("movie", settings), title, year),
+        "savepath": savepath or _movie_save_path(_template_for_type("movie", settings), title, year),
         "pattern": pattern,
         "replace": _movie_naming_replace(replace_template, title, year) if pattern and replace_template else "",
         "enddate": "",
