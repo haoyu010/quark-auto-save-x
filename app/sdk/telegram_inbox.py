@@ -405,6 +405,54 @@ def _task_settings(config_data: Dict[str, Any]) -> Dict[str, Any]:
     return settings
 
 
+def _yesterday_date_string() -> str:
+    return time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400))
+
+
+def _task_content_type(task: Dict[str, Any]) -> str:
+    if not isinstance(task, dict):
+        return ""
+    cal = task.get("calendar_info") or {}
+    extracted = cal.get("extracted") or {}
+    return str(task.get("content_type") or extracted.get("content_type") or "").strip().lower()
+
+
+def mark_movie_task_completed(task: Dict[str, Any]) -> bool:
+    """Make movie tasks one-shot: no scheduled reruns and no invalid-link replacement."""
+    if _task_content_type(task) != "movie" and task.get("movie_once") is not True:
+        return False
+    before = {
+        "runweek": task.get("runweek"),
+        "enddate": task.get("enddate"),
+        "auto_replace_invalid_shareurl": task.get("auto_replace_invalid_shareurl"),
+        "movie_once": task.get("movie_once"),
+        "skip_calendar_refresh": task.get("skip_calendar_refresh"),
+    }
+    task["runweek"] = []
+    task["enddate"] = str(task.get("enddate") or _yesterday_date_string())
+    task["auto_replace_invalid_shareurl"] = "disabled"
+    task["movie_once"] = True
+    task["skip_calendar_refresh"] = True
+    after = {
+        "runweek": task.get("runweek"),
+        "enddate": task.get("enddate"),
+        "auto_replace_invalid_shareurl": task.get("auto_replace_invalid_shareurl"),
+        "movie_once": task.get("movie_once"),
+        "skip_calendar_refresh": task.get("skip_calendar_refresh"),
+    }
+    return before != after
+
+
+def mark_movie_tasks_completed(config_data: Optional[Dict[str, Any]] = None) -> int:
+    if not isinstance(config_data, dict):
+        return 0
+    changed = 0
+    for task in config_data.get("tasklist", []) or []:
+        if isinstance(task, dict) and mark_movie_task_completed(task):
+            changed += 1
+    return changed
+
+
 def _normalize_media_save_path(path: str) -> str:
     return re.sub(r"/{2,}", "/", str(path or "").replace("\\", "/")).strip().strip("/")
 
@@ -777,6 +825,7 @@ def build_media_task_from_share(
             },
         },
     }
+    mark_movie_task_completed(task)
     return task
 
 

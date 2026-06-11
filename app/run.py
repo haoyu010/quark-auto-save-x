@@ -23,6 +23,8 @@ from sdk.telegram_channel import TelegramChannelCache
 from sdk.telegram_inbox import (
     TelegramAutoCreateService,
     TelegramInboxPoller,
+    mark_movie_task_completed,
+    mark_movie_tasks_completed,
     repair_media_library_task,
     repair_media_library_tasks,
 )
@@ -2360,6 +2362,31 @@ def ensure_push_config_defaults(data):
     return push_config
 
 
+def _calendar_content_type(value):
+    if not isinstance(value, dict):
+        return ""
+    calendar_info = value.get("calendar_info") or {}
+    extracted = calendar_info.get("extracted") or {}
+    return str(value.get("content_type") or extracted.get("content_type") or "").strip().lower()
+
+
+def is_tv_calendar_content(task):
+    """Return False for one-shot movie tasks; legacy/TV-like tasks keep calendar refresh."""
+    if not isinstance(task, dict):
+        return True
+    if task.get("skip_calendar_refresh") is True:
+        return False
+    if task.get("movie_once") is True:
+        return False
+    return _calendar_content_type(task) != "movie"
+
+
+def is_tv_calendar_show(show):
+    if not isinstance(show, dict):
+        return True
+    return str(show.get("content_type") or "").strip().lower() != "movie"
+
+
 @app.route("/api/notify/telegram/test", methods=["POST"])
 def test_telegram_notify():
     if not is_login():
@@ -2480,6 +2507,9 @@ def update():
     for task in config_data.get("tasklist", []) or []:
         if isinstance(task, dict):
             task["addition"] = {}
+    completed_movies = mark_movie_tasks_completed(config_data)
+    if completed_movies:
+        logging.info(f">>> 已将 {completed_movies} 个电影任务标记为一次性完成")
     
     # 同步更新任务的插件配置
     sync_task_plugins_config()
@@ -2782,16 +2812,21 @@ def _tmdb_service_for_media_repair():
 
 
 def repair_media_library_tasks_in_config(write=False, reason="") -> int:
-    """Repair old media-library paths in config, such as missing 国漫 category."""
+    """Repair old media-library paths and one-shot movie task flags in config."""
     try:
         tmdb_service = _tmdb_service_for_media_repair()
         repaired = repair_media_library_tasks(config_data, tmdb_service) if tmdb_service else 0
-        if repaired:
+        completed_movies = mark_movie_tasks_completed(config_data)
+        changed = repaired + completed_movies
+        if changed:
             if write:
                 Config.write_json(CONFIG_PATH, config_data)
             suffix = f"（{reason}）" if reason else ""
-            logging.info(f">>> 已修正 {repaired} 个媒体库任务路径{suffix}")
-        return repaired
+            if repaired:
+                logging.info(f">>> 已修正 {repaired} 个媒体库任务路径{suffix}")
+            if completed_movies:
+                logging.info(f">>> 已将 {completed_movies} 个电影任务标记为一次性完成{suffix}")
+        return changed
     except Exception as exc:
         logging.warning(f">>> 修正媒体库任务路径失败: {exc}")
         return 0
@@ -2803,13 +2838,13 @@ def repair_media_library_tasklist_for_run(tasklist) -> int:
         if not tasklist:
             return 0
         tmdb_service = _tmdb_service_for_media_repair()
-        if not tmdb_service:
-            return 0
         temp_config = {
             "task_settings": (config_data.get("task_settings") or {}) if isinstance(config_data, dict) else {},
             "tasklist": tasklist,
         }
-        return repair_media_library_tasks(temp_config, tmdb_service)
+        repaired = repair_media_library_tasks(temp_config, tmdb_service) if tmdb_service else 0
+        completed_movies = mark_movie_tasks_completed(temp_config)
+        return repaired + completed_movies
     except Exception as exc:
         logging.warning(f">>> 运行前修正媒体库任务路径失败: {exc}")
         return 0
@@ -2825,6 +2860,7 @@ def run_telegram_inbox_task_now(task, original_index=None):
         if tmdb_service:
             if repair_media_library_task(task, config_data, tmdb_service):
                 logging.info(f">>> Telegram 自动创建任务已修正媒体库路径: {task.get('taskname', '')} -> {task.get('savepath', '')}")
+        mark_movie_task_completed(task)
         try:
             if original_index is not None:
                 idx = int(original_index)
@@ -2834,7 +2870,20 @@ def run_telegram_inbox_task_now(task, original_index=None):
                     new_share = str(task.get("shareurl") or "")
                     if not new_share or old_share == new_share:
                         current = tasks[idx] or {}
-                        watched_keys = ("taskname", "savepath", "content_type", "library_category", "pattern", "episode_naming", "calendar_info")
+                        watched_keys = (
+                            "taskname",
+                            "savepath",
+                            "content_type",
+                            "library_category",
+                            "pattern",
+                            "episode_naming",
+                            "calendar_info",
+                            "runweek",
+                            "enddate",
+                            "auto_replace_invalid_shareurl",
+                            "movie_once",
+                            "skip_calendar_refresh",
+                        )
                         if any(current.get(key) != task.get(key) for key in watched_keys):
                             tasks[idx] = task
                             Config.write_json(CONFIG_PATH, config_data)
@@ -3263,6 +3312,8 @@ def ensure_calendar_info_for_tasks() -> bool:
     for task in tasks:
         # 跳过标记为无需参与日历匹配的任务
         if task.get('skip_calendar') is True:
+            continue
+        if not is_tv_calendar_content(task):
             continue
         task_name = task.get('taskname') or task.get('task_name') or ''
         save_path = task.get('savepath', '')
@@ -6204,6 +6255,8 @@ def process_new_tasks_async():
         # 收集需要处理的任务
         tasks_to_process = []
         for task in tasks:
+            if not is_tv_calendar_content(task):
+                continue
             # 只处理没有完整元数据的任务
             cal = (task or {}).get('calendar_info') or {}
             match = cal.get('match') or {}
@@ -6242,6 +6295,8 @@ def process_new_tasks_async():
 def process_single_task_async(task, tmdb_service, cal_db):
     """处理单个任务的元数据匹配和海报下载"""
     try:
+        if not is_tv_calendar_content(task):
+            return
         cal = (task or {}).get('calendar_info') or {}
         match = cal.get('match') or {}
         extracted = cal.get('extracted') or {}
@@ -6767,6 +6822,8 @@ def do_calendar_bootstrap() -> tuple:
         tasks = config_data.get('tasklist', [])
         any_written = False
         for task in tasks:
+            if not is_tv_calendar_content(task):
+                continue
             cal = (task or {}).get('calendar_info') or {}
             match = cal.get('match') or {}
             extracted = cal.get('extracted') or {}
@@ -7472,6 +7529,8 @@ def calendar_refresh_latest_season():
         show = cal_db.get_show(int(tmdb_id))
         if not show:
             return jsonify({"success": False, "message": "未初始化该剧（请先 bootstrap）"})
+        if not is_tv_calendar_show(show):
+            return jsonify({"success": True, "message": "电影任务无需刷新季集", "updated": 0, "skipped": True})
 
         try:
             show_name_for_log = show.get('name') or f"tmdb:{tmdb_id}"
@@ -8216,7 +8275,7 @@ def calendar_edit_metadata():
                 except Exception as e:
                     logging.warning(f"同步本地播出时间到数据库失败: {e}")
 
-        valid_types = {'tv', 'anime', 'variety', 'documentary', 'other', ''}
+        valid_types = {'movie', 'tv', 'anime', 'variety', 'documentary', 'other', ''}
         if new_content_type in valid_types:
             extracted = (target.setdefault('calendar_info', {}).setdefault('extracted', {}))
             if extracted.get('content_type') != new_content_type:
@@ -8237,6 +8296,8 @@ def calendar_edit_metadata():
                 except Exception as e:
                     logging.warning(f"同步内容类型到数据库失败: {e}")
                 changed = True
+                if mark_movie_task_completed(target):
+                    changed = True
 
         did_rematch = False
         new_tid = None
@@ -8633,6 +8694,7 @@ def calendar_edit_metadata():
                 logging.warning("无法处理自定义海报：缺少TMDB ID")
 
         if changed:
+            mark_movie_task_completed(target)
             Config.write_json(CONFIG_PATH, config_data)
 
         try:
@@ -8838,17 +8900,21 @@ def run_calendar_refresh_all_internal():
         status_changed_any = False
         for tmdb_id in shows:
             try:
+                existing_show = db.get_show(int(tmdb_id)) or {}
+                if not is_tv_calendar_show(existing_show):
+                    continue
+                latest_season_number = int(existing_show.get('latest_season_number') or 1)
                 # 直接重用内部逻辑
                 with app.app_context():
                     # 调用与 endpoint 相同的刷新流程
-                    season = tmdb_service.get_tv_show_episodes(int(tmdb_id), int(db.get_show(int(tmdb_id))['latest_season_number'])) or {}
+                    season = tmdb_service.get_tv_show_episodes(int(tmdb_id), latest_season_number) or {}
                     episodes = season.get('episodes', []) or []
                     from time import time as _now
                     now_ts = int(_now())
                     for ep in episodes:
                         db.upsert_episode(
                             tmdb_id=int(tmdb_id),
-                            season_number=int(db.get_show(int(tmdb_id))['latest_season_number']),
+                            season_number=latest_season_number,
                             episode_number=int(ep.get('episode_number') or 0),
                             name=ep.get('name') or '',
                             overview=ep.get('overview') or '',
@@ -8861,11 +8927,10 @@ def run_calendar_refresh_all_internal():
                     
                     # 如果有 Trakt 的源时间/时区，计算每集的本地播出日期并更新 air_date_local
                     # 如果没有时区信息，将 air_date_local 设置为与 air_date 相同的值
-                    update_episodes_air_date_local(db, int(tmdb_id), int(db.get_show(int(tmdb_id))['latest_season_number']), episodes)
+                    update_episodes_air_date_local(db, int(tmdb_id), latest_season_number, episodes)
 
                     # 新增：节目状态变更检测与更新（如 Returning → 本季终/已完结 等）
                     try:
-                        existing_show = db.get_show(int(tmdb_id)) or {}
                         raw_details = tmdb_service.get_tv_show_details(int(tmdb_id)) or {}
                         raw_status = (raw_details.get('status') or '')
                         latest_sn_for_status = int((existing_show or {}).get('latest_season_number') or 1)

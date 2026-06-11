@@ -245,6 +245,26 @@ class AutoReplacePersistTest(unittest.TestCase):
         self.assertEqual(selection["startfid"], "fid-e13")
         self.assertEqual(task["auto_replace_saved_episode_floor"], 12)
 
+    def test_movie_task_does_not_attempt_auto_replace(self):
+        account = AutoReplaceFloorQuark([])
+        calls = []
+        task = {
+            "taskname": "镖人：风起大漠",
+            "content_type": "movie",
+            "shareurl_ban": "分享资源已失效",
+        }
+
+        with patch.object(
+            account,
+            "try_auto_replace_invalid_shareurl",
+            side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or {"replaced": True},
+        ):
+            replaced, retry_tree = account.retry_save_after_auto_replace(task, task["shareurl_ban"])
+
+        self.assertFalse(replaced)
+        self.assertIsNone(retry_tree)
+        self.assertEqual(calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()

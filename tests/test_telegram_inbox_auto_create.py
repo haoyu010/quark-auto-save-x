@@ -12,6 +12,7 @@ from app.sdk.telegram_inbox import (
     build_media_task_from_share,
     extract_title_seed,
     is_authorized_message,
+    mark_movie_task_completed,
     repair_media_library_task,
     repair_media_library_tasks,
 )
@@ -130,6 +131,10 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(task["replace"], "阿基拉 (1988).\\2")
         self.assertFalse(task["use_episode_naming"])
         self.assertEqual(task["calendar_info"]["match"]["tmdb_id"], 149)
+        self.assertEqual(task["runweek"], [])
+        self.assertEqual(task["auto_replace_invalid_shareurl"], "disabled")
+        self.assertTrue(task["movie_once"])
+        self.assertTrue(task["skip_calendar_refresh"])
 
     def test_tv_share_builds_season_path_and_episode_naming(self):
         account = FakeAccount({
@@ -356,6 +361,25 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
         self.assertEqual(task["content_type"], "movie")
         self.assertEqual(task["library_category"], "动画电影")
         self.assertEqual(task["savepath"], "影视剧/电影/动画电影/阿基拉 (1988)")
+        self.assertEqual(task["runweek"], [])
+        self.assertEqual(task["auto_replace_invalid_shareurl"], "disabled")
+
+    def test_mark_movie_task_completed_migrates_existing_movie_task(self):
+        task = {
+            "taskname": "镖人：风起大漠",
+            "content_type": "movie",
+            "runweek": [1, 2, 3, 4, 5, 6, 7],
+            "enddate": "",
+        }
+
+        changed = mark_movie_task_completed(task)
+
+        self.assertTrue(changed)
+        self.assertEqual(task["runweek"], [])
+        self.assertTrue(task["enddate"])
+        self.assertEqual(task["auto_replace_invalid_shareurl"], "disabled")
+        self.assertTrue(task["movie_once"])
+        self.assertTrue(task["skip_calendar_refresh"])
 
     def test_media_root_classifies_movie_library_category_like_organizer_rules(self):
         account = FakeAccount({

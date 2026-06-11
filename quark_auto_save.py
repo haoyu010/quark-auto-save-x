@@ -126,6 +126,55 @@ def get_effective_filterwords(task=None, config_data=None):
     merged_block = _merge_filter_terms(block_part, default_filterwords)
     return "|".join(parts[:-1] + [merged_block])
 
+
+def task_content_type(task):
+    if not isinstance(task, dict):
+        return ""
+    calendar_info = task.get("calendar_info") or {}
+    extracted = calendar_info.get("extracted") or {}
+    return str(task.get("content_type") or extracted.get("content_type") or "").strip().lower()
+
+
+def is_movie_task(task):
+    if not isinstance(task, dict):
+        return False
+    return task.get("movie_once") is True or task_content_type(task) == "movie"
+
+
+def movie_task_completed_date():
+    return time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400))
+
+
+def mark_movie_task_completed(task):
+    if not is_movie_task(task):
+        return False
+    before = (
+        task.get("runweek"),
+        task.get("enddate"),
+        task.get("auto_replace_invalid_shareurl"),
+        task.get("movie_once"),
+        task.get("skip_calendar_refresh"),
+    )
+    task["runweek"] = []
+    task["enddate"] = str(task.get("enddate") or movie_task_completed_date())
+    task["auto_replace_invalid_shareurl"] = "disabled"
+    task["movie_once"] = True
+    task["skip_calendar_refresh"] = True
+    after = (
+        task.get("runweek"),
+        task.get("enddate"),
+        task.get("auto_replace_invalid_shareurl"),
+        task.get("movie_once"),
+        task.get("skip_calendar_refresh"),
+    )
+    return before != after
+
+
+def task_auto_replace_disabled(task):
+    if is_movie_task(task):
+        return True
+    return str((task or {}).get("auto_replace_invalid_shareurl") or "").strip().lower() == "disabled"
+
 def advanced_filter_files(file_list, filterwords):
     """
     高级过滤函数，支持保留词和过滤词
@@ -1741,6 +1790,7 @@ class Config:
                 task.pop("em" + "by_id", None)
                 task.pop("media_id", None)
                 task["addition"] = {}
+                mark_movie_task_completed(task)
         task_settings = config_data.setdefault("task_settings", {})
         task_settings.setdefault("auto_replace_invalid_shareurl", "enabled")
         task_settings.setdefault("auto_replace_min_score", 85)
@@ -3258,6 +3308,8 @@ class Quark:
 
     def try_auto_replace_invalid_shareurl(self, task, reason=""):
         """尝试为失效任务自动搜索并替换新的分享链接。"""
+        if task_auto_replace_disabled(task):
+            return {"attempted": False, "replaced": False, "message": "任务已禁用自动换源"}
         try:
             try:
                 from app.sdk.resource_replacer import ResourceAutoReplacer
@@ -3300,6 +3352,8 @@ class Quark:
     def retry_save_after_auto_replace(self, task, reason=""):
         """自动换源成功后重试一次转存，避免递归循环。"""
         if task.get("_auto_replace_retrying"):
+            return False, None
+        if task_auto_replace_disabled(task):
             return False, None
         result = self.try_auto_replace_invalid_shareurl(task, reason)
         if not result.get("replaced"):
@@ -5849,6 +5903,7 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
 
     # 执行任务
     for index, task in enumerate(tasklist):
+        mark_movie_task_completed(task)
         # 检查环境变量获取真实的任务索引（用于显示）
         if len(tasklist) == 1 and os.environ.get("ORIGINAL_TASK_INDEX"):
             try:
