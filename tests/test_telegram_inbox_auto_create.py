@@ -123,6 +123,8 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
                 "id": 999,
                 "name": "斗破苍穹",
                 "first_air_date": "2017-01-07",
+                "origin_country": ["CN"],
+                "original_language": "zh",
                 "last_episode_to_air": {"season_number": 5},
                 "genres": [{"id": 16, "name": "Animation"}],
                 "seasons": [{"season_number": 5, "episode_count": 104}],
@@ -219,6 +221,8 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
                 "id": 321,
                 "name": "南部档案",
                 "first_air_date": "2026-01-01",
+                "origin_country": ["CN"],
+                "original_language": "zh",
                 "last_episode_to_air": {"season_number": 1},
                 "seasons": [{"season_number": 1, "episode_count": 6}],
             },
@@ -257,6 +261,8 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
                 "id": 321,
                 "name": "南部档案",
                 "first_air_date": "2026-01-01",
+                "origin_country": ["CN"],
+                "original_language": "zh",
                 "last_episode_to_air": {"season_number": 1},
                 "seasons": [{"season_number": 1, "episode_count": 6}],
             },
@@ -279,7 +285,7 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
 
         self.assertEqual(task["taskname"], "南部档案")
         self.assertEqual(task["content_type"], "tv")
-        self.assertEqual(task["savepath"], "影视剧/电视剧/南部档案/Season 01")
+        self.assertEqual(task["savepath"], "影视剧/电视剧/国产剧/南部档案/Season 01")
         self.assertEqual(task["episode_naming"], "南部档案 - S01E[]")
 
     def test_media_root_builds_movie_library_path_for_inbox_tasks(self):
@@ -326,6 +332,8 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
                 "id": 999,
                 "name": "斗破苍穹",
                 "first_air_date": "2017-01-07",
+                "origin_country": ["CN"],
+                "original_language": "zh",
                 "last_episode_to_air": {"season_number": 5},
                 "genres": [{"id": 16, "name": "Animation"}],
                 "seasons": [{"season_number": 5, "episode_count": 104}],
@@ -349,7 +357,7 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
 
         self.assertEqual(task["taskname"], "斗破苍穹")
         self.assertEqual(task["content_type"], "anime")
-        self.assertEqual(task["savepath"], "影视剧/动漫/斗破苍穹/Season 05")
+        self.assertEqual(task["savepath"], "影视剧/电视剧/国漫/斗破苍穹/Season 05")
 
     def test_episode_update_quality_words_build_anime_task_not_movie(self):
         self.assertEqual(
@@ -368,6 +376,8 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
                 "id": 2025,
                 "name": "师兄啊师兄",
                 "first_air_date": "2023-01-19",
+                "origin_country": ["CN"],
+                "original_language": "zh",
                 "last_episode_to_air": {"season_number": 1},
                 "genres": [{"id": 16, "name": "Animation"}],
                 "seasons": [{"season_number": 1, "episode_count": 145}],
@@ -390,10 +400,47 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
 
         self.assertEqual(task["taskname"], "师兄啊师兄")
         self.assertEqual(task["content_type"], "anime")
-        self.assertEqual(task["savepath"], "影视库/动漫/师兄啊师兄/Season 01")
+        self.assertEqual(task["savepath"], "影视库/电视剧/国漫/师兄啊师兄/Season 01")
         self.assertEqual(task["episode_naming"], "师兄啊师兄 - S01E[]")
         self.assertEqual(task["pattern"], "师兄啊师兄 - S01E[]")
         self.assertEqual(task["replace"], "")
+
+    def test_media_root_keeps_non_chinese_animation_out_of_guoman(self):
+        account = FakeAccount({
+            "frieren": [
+                {"file_name": "葬送的芙莉莲.S01E01.mkv", "dir": False, "fid": "f1"},
+            ]
+        })
+        tmdb = FakeTMDB(
+            tv={"id": 209867, "name": "葬送的芙莉莲", "first_air_date": "2023-09-29", "origin_country": ["JP"], "original_language": "ja"},
+            details={
+                "id": 209867,
+                "name": "葬送的芙莉莲",
+                "first_air_date": "2023-09-29",
+                "origin_country": ["JP"],
+                "original_language": "ja",
+                "last_episode_to_air": {"season_number": 1},
+                "genres": [{"id": 16, "name": "Animation"}],
+                "seasons": [{"season_number": 1, "episode_count": 28}],
+            },
+        )
+
+        task = build_media_task_from_share(
+            "https://pan.quark.cn/s/frieren",
+            "葬送的芙莉莲 4K S01E01 https://pan.quark.cn/s/frieren",
+            account,
+            {
+                "task_settings": {
+                    "telegram_inbox_media_root": "影视库",
+                    "tv_naming_rule": "剧名 - S季数E[]",
+                    "tv_ignore_extension": True,
+                }
+            },
+            tmdb,
+        )
+
+        self.assertEqual(task["content_type"], "anime")
+        self.assertEqual(task["savepath"], "影视库/电视剧/日番/葬送的芙莉莲/Season 01")
 
     def test_common_episode_update_formats_are_cleaned_and_detected(self):
         cases = {
