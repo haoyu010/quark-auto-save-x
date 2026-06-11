@@ -3,6 +3,7 @@ import unittest
 
 from app.sdk.telegram_inbox import (
     TelegramAutoCreateService,
+    TelegramInboxPoller,
     build_media_task_from_share,
     extract_title_seed,
     is_authorized_message,
@@ -40,6 +41,27 @@ class FakeTMDB:
 
     def get_tv_show_details(self, tv_id):
         return self.details
+
+
+class FakeTelegramResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def json(self):
+        return self.payload
+
+
+class FakeTelegramSession:
+    def __init__(self):
+        self.calls = []
+
+    def post(self, url, data=None, **kwargs):
+        self.calls.append(("POST", url, data or {}, kwargs))
+        return FakeTelegramResponse({"ok": True})
+
+    def get(self, url, params=None, **kwargs):
+        self.calls.append(("GET", url, params or {}, kwargs))
+        return FakeTelegramResponse({"ok": True, "result": []})
 
 
 class TelegramInboxAutoCreateTest(unittest.TestCase):
@@ -234,6 +256,31 @@ class TelegramInboxAutoCreateTest(unittest.TestCase):
             extract_title_seed("  牧神记 S01\nhttps://pan.quark.cn/s/abc  "),
             "牧神记 S01",
         )
+
+    def test_poller_deletes_webhook_before_long_polling(self):
+        session = FakeTelegramSession()
+        config = {
+            "push_config": {
+                "TG_INBOX_AUTO_CREATE": "enabled",
+                "TG_BOT_TOKEN": "token",
+                "TG_USER_ID": "42",
+                "TG_INBOX_LAST_UPDATE_ID": 0,
+            }
+        }
+        poller = TelegramInboxPoller(
+            config_getter=lambda: config,
+            service_factory=lambda cfg: None,
+            state_saver=lambda cfg: None,
+            session=session,
+        )
+
+        processed = poller.poll_once()
+
+        self.assertEqual(processed, 0)
+        self.assertEqual(session.calls[0][0], "POST")
+        self.assertTrue(session.calls[0][1].endswith("/deleteWebhook"))
+        self.assertEqual(session.calls[1][0], "GET")
+        self.assertTrue(session.calls[1][1].endswith("/getUpdates"))
 
 
 if __name__ == "__main__":

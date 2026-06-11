@@ -442,14 +442,21 @@ class TelegramAutoCreateService:
     def handle_message(self, message: Dict[str, Any]) -> TelegramAutoCreateResult:
         push_config = self.config_data.get("push_config", {}) or {}
         if not is_authorized_message(message, push_config.get("TG_USER_ID")):
+            self.logger(
+                "Telegram 自动收链忽略非授权消息: "
+                f"chat={((message.get('chat') or {}).get('id'))}, "
+                f"from={((message.get('from') or {}).get('id'))}"
+            )
             return TelegramAutoCreateResult("ignored", "非授权 Telegram 用户，已忽略")
 
         text = _message_text(message)
         links = extract_quark_links(text)
         if not links:
+            self.logger("Telegram 自动收链收到消息，但未检测到夸克链接")
             return TelegramAutoCreateResult("no_link", "未检测到夸克链接")
         shareurl = links[0]
         if self._is_duplicate(shareurl):
+            self.logger(f"Telegram 自动收链检测到重复链接: {shareurl}")
             return TelegramAutoCreateResult("duplicate", "这个夸克链接已经存在任务里了", shareurl=shareurl)
 
         account = self.account_factory()
@@ -464,6 +471,7 @@ class TelegramAutoCreateService:
         task_index = len(self.config_data["tasklist"]) - 1
         self.save_config(self.config_data)
         self.run_task(task, task_index)
+        self.logger(f"Telegram 自动收链已创建任务: {task.get('taskname', '')} -> {task.get('savepath', '')}")
         return TelegramAutoCreateResult(
             "created",
             f"已创建任务并开始转存：{task.get('taskname', '')}",
@@ -489,6 +497,7 @@ class TelegramInboxPoller:
         self.session = session or requests.Session()
         self.logger = logger or (lambda message: None)
         self._running = False
+        self._webhook_deleted = False
 
     @staticmethod
     def enabled(push_config: Dict[str, Any]) -> bool:
@@ -529,11 +538,29 @@ class TelegramInboxPoller:
         except Exception as exc:
             self.logger(f"Telegram 自动收链回复失败: {exc}")
 
+    def ensure_long_polling_available(self, push_config: Dict[str, Any]) -> None:
+        if self._webhook_deleted:
+            return
+        response = self.session.post(
+            f"{self.api_base(push_config)}/deleteWebhook",
+            data={"drop_pending_updates": "false"},
+            **self.request_kwargs(push_config),
+        )
+        try:
+            data = response.json()
+        except Exception:
+            data = {}
+        if data and not data.get("ok", True):
+            raise RuntimeError(str(data))
+        self._webhook_deleted = True
+        self.logger("Telegram 自动收链已切换为长轮询模式")
+
     def poll_once(self) -> int:
         config_data = self.config_getter()
         push_config = (config_data.get("push_config") or {}) if isinstance(config_data, dict) else {}
         if not self.enabled(push_config):
             return 0
+        self.ensure_long_polling_available(push_config)
         offset = int(push_config.get("TG_INBOX_LAST_UPDATE_ID") or 0) + 1
         response = self.session.get(
             f"{self.api_base(push_config)}/getUpdates",
