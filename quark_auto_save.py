@@ -1235,6 +1235,7 @@ def _extract_variety_episode(filename):
         r"[Ss]\d{1,2}[Ee](\d{1,4})",
         r"(?<![A-Za-z0-9])(?:EP|E)[\s._-]*(\d{1,4})(?![A-Za-z0-9])",
         r"第\s*([0-9一二三四五六七八九十百千万零〇两]+)\s*[期集话話]",
+        r"(?<!\d)([0-9一二三四五六七八九十百千万零〇两]+)\s*[期集话話]",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.I)
@@ -1251,12 +1252,14 @@ def _extract_variety_episode(filename):
 def _extract_variety_label(filename):
     text = os.path.splitext(str(filename or ""))[0]
     issue_number = r"(?:\d+|[一二三四五六七八九十百千万零〇两]+)"
-    segment_match = re.search(
-        rf"第\s*{issue_number}\s*[期集话話]\s*(?:[（(]\s*)?([上中下])(?:\s*[）)])?",
-        text,
+    segment_patterns = (
+        rf"(?:第\s*)?{issue_number}\s*[期集话話][\s._\-·丨]*(?:[（(]\s*)?([上中下])(?:\s*[）)])?",
+        r"(?:[Ss]\d{1,2}[Ee]|(?<![A-Za-z0-9])(?:EP|E)[\s._-]*)\d{1,4}[\s._\-·丨]*(?:[（(]\s*)?([上中下])(?:\s*[）)])?",
     )
-    if segment_match:
-        return segment_match.group(1)
+    for pattern in segment_patterns:
+        segment_match = re.search(pattern, text, flags=re.I)
+        if segment_match:
+            return segment_match.group(1)
 
     label_aliases = (
         ("超前企划", "超前企划"),
@@ -1589,7 +1592,7 @@ def chinese_to_arabic(chinese):
     digit_map = {
         '零': 0, '一': 1, '二': 2, '三': 3, '四': 4, 
         '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, 
-        '两': 2
+        '两': 2, '〇': 0
     }
     
     # 单位映射
