@@ -6135,6 +6135,22 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
                 # 获取当前目录
                 savepath = re.sub(r"/{2,}", "/", f"/{task['savepath']}")
                 if account.savepath_fid.get(savepath):
+                    transferred_file_fids = set()
+                    transferred_file_names = set()
+                    if isinstance(is_new_tree, Tree):
+                        for node in is_new_tree.all_nodes_itr():
+                            node_data = getattr(node, "data", None) or {}
+                            if node_data.get("is_dir", False):
+                                continue
+                            if node.identifier:
+                                transferred_file_fids.add(str(node.identifier))
+                            node_name = remove_file_icons(str(getattr(node, "tag", "") or ""))
+                            if node_name:
+                                transferred_file_names.add(node_name)
+                            node_path = node_data.get("path")
+                            if node_path:
+                                transferred_file_names.add(os.path.basename(str(node_path)))
+
                     # 创建新的Tree对象
                     new_tree = Tree()
                     # 创建根节点
@@ -6234,22 +6250,33 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
                             is_transferred_file = False
                             check_method = None
 
-                            # 方法1：检查文件名是否在实际重命名结果中
-                            if file["file_name"] in actual_file_names.values():
+                            # 方法1：优先继承原始转存树，避免部分文件未重命名时被通知漏掉
+                            file_fid = str(file.get("fid") or "")
+                            if file_fid and file_fid in transferred_file_fids:
                                 is_transferred_file = True
-                                check_method = "method1_actual_names"
+                                check_method = "method1_original_tree_fid"
 
-                            # 方法2：检查文件名是否在预期重命名结果中（用于重命名失败的情况）
+                            # 方法2：未重命名的文件通常仍保持原名，按原始转存树文件名保留
+                            elif file["file_name"] in transferred_file_names:
+                                is_transferred_file = True
+                                check_method = "method2_original_tree_name"
+
+                            # 方法3：检查文件名是否在实际重命名结果中
+                            elif file["file_name"] in actual_file_names.values():
+                                is_transferred_file = True
+                                check_method = "method3_actual_names"
+
+                            # 方法4：检查文件名是否在预期重命名结果中（用于重命名失败的情况）
                             elif file["file_name"] in expected_renamed_files.values():
                                 is_transferred_file = True
-                                check_method = "method2_expected_values"
+                                check_method = "method4_expected_values"
 
-                            # 方法3：检查文件名是否是原始文件名（重命名失败保持原名）
+                            # 方法5：检查文件名是否是原始文件名（重命名失败保持原名）
                             elif file["file_name"] in expected_renamed_files.keys():
                                 is_transferred_file = True
-                                check_method = "method3_expected_keys"
+                                check_method = "method5_expected_keys"
                             
-                            # 方法4：扁平化模式下，检查文件是否是最近创建的（可能是转存的文件）
+                            # 方法6：扁平化模式下，检查文件是否是最近创建的（可能是转存的文件）
                             elif flat_mode:
                                 file_updated_at = file.get("updated_at", 0)
                                 # 处理毫秒级时间戳
@@ -6259,7 +6286,7 @@ def do_save(account, tasklist=[], ignore_execution_rules=False):
                                     time_diff = current_time - int(file_updated_at)
                                     if time_diff < time_threshold:
                                         is_transferred_file = True
-                                        check_method = "method4_recent_file"
+                                        check_method = "method6_recent_file"
 
                             if is_transferred_file:
                                 new_tree.create_node(
