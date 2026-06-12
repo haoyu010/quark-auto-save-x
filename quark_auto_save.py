@@ -1209,6 +1209,115 @@ def rewrite_episode_naming_season(episode_naming, season_number):
         count=1,
     )
 
+def is_variety_task(task):
+    if not isinstance(task, dict):
+        return False
+    text = " ".join(
+        str(task.get(key) or "")
+        for key in ("library_category", "savepath", "content_type", "taskname")
+    )
+    return "综艺" in text or "variety" in text.lower()
+
+def _extract_variety_date(filename):
+    text = str(filename or "")
+    match = re.search(r"(?<!\d)((?:19|20)\d{2})(\d{2})(\d{2})(?!\d)", text)
+    if match:
+        return "".join(match.groups())
+    match = re.search(r"(?<!\d)((?:19|20)\d{2})[-./年](\d{1,2})[-./月](\d{1,2})(?:日)?(?!\d)", text)
+    if match:
+        year, month, day = match.groups()
+        return f"{int(year):04d}{int(month):02d}{int(day):02d}"
+    return ""
+
+def _extract_variety_episode(filename):
+    text = os.path.splitext(str(filename or ""))[0]
+    patterns = [
+        r"[Ss]\d{1,2}[Ee](\d{1,4})",
+        r"(?<![A-Za-z0-9])(?:EP|E)[\s._-]*(\d{1,4})(?![A-Za-z0-9])",
+        r"第\s*([0-9一二三四五六七八九十百千万零〇两]+)\s*[期集话話]",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.I)
+        if not match:
+            continue
+        value = match.group(1)
+        if value.isdigit():
+            return int(value)
+        number = chinese_to_arabic(value)
+        if number is not None:
+            return int(number)
+    return None
+
+def _extract_variety_label(filename):
+    text = os.path.splitext(str(filename or ""))[0]
+    issue_number = r"(?:\d+|[一二三四五六七八九十百千万零〇两]+)"
+    segment_match = re.search(
+        rf"第\s*{issue_number}\s*[期集话話]\s*(?:[（(]\s*)?([上中下])(?:\s*[）)])?",
+        text,
+    )
+    if segment_match:
+        return segment_match.group(1)
+
+    label_aliases = (
+        ("超前企划", "超前企划"),
+        ("训练室", "训练室"),
+        ("纯享版", "纯享版"),
+        ("纯享", "纯享版"),
+        ("会员版", "会员版"),
+        ("加更版", "加更"),
+        ("加更", "加更"),
+        ("尝鲜", "尝鲜"),
+        ("未播", "未播"),
+        ("先导片", "先导片"),
+        ("先导", "先导片"),
+        ("预告", "预告"),
+        ("花絮", "花絮"),
+        ("直拍", "直拍"),
+        ("正片", "正片"),
+        ("完整版", "完整版"),
+        ("精编版", "精编版"),
+    )
+    for needle, label in label_aliases:
+        if needle in text:
+            return label
+    return ""
+
+def parse_variety_filename(filename):
+    return {
+        "episode": _extract_variety_episode(filename),
+        "date": _extract_variety_date(filename),
+        "label": _extract_variety_label(filename),
+    }
+
+def build_variety_episode_name(title, season_number, filename):
+    parsed = parse_variety_filename(filename)
+    season = _positive_int(season_number) or 1
+    title = str(title or "").strip() or "综艺"
+    file_ext = os.path.splitext(str(filename or ""))[1]
+    episode = parsed.get("episode")
+    label = parsed.get("label") or ""
+    date = parsed.get("date") or ""
+
+    if episode is not None:
+        base = f"{title} - S{season:02d}E{int(episode):02d}"
+        if label:
+            base = f"{base} - {label}"
+        return f"{base}{file_ext}"
+    if label and date:
+        return f"{title} - S{season:02d} - {date} - {label}{file_ext}"
+    if label:
+        return f"{title} - S{season:02d} - {label}{file_ext}"
+    return None
+
+def _rename_sort_value(value):
+    if isinstance(value, tuple):
+        return value
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = float("inf")
+    return (0, number, 0, 0, "")
+
 def get_task_tmdb_season_number(task):
     if not isinstance(task, dict):
         return None
@@ -4868,6 +4977,8 @@ class Quark:
             # 使用剧集命名模式
             episode_pattern = task["episode_naming"]
             regex_pattern = task.get("regex_pattern")
+            is_variety_episode_task = is_variety_task(task)
+            variety_season_number = get_task_tmdb_season_number(task) or 1
             
             # 初始化变量
             already_renamed_files = set()  # 用于防止重复重命名
@@ -4916,6 +5027,27 @@ class Quark:
                 if 'CONFIG_DATA' not in globals() or not CONFIG_DATA:
                     return extract_episode_number(filename)
                 return extract_episode_number(filename, config_data=CONFIG_DATA)
+
+            def build_episode_mode_save_name(filename, episode_num=None):
+                if is_variety_episode_task:
+                    variety_name = build_variety_episode_name(
+                        task.get("taskname") or "",
+                        variety_season_number,
+                        filename,
+                    )
+                    if variety_name:
+                        return apply_subtitle_naming_rule(variety_name, task)
+
+                if episode_num is None:
+                    episode_num = extract_episode_number_local(filename)
+                if episode_num is None:
+                    return None
+                file_ext = os.path.splitext(filename)[1]
+                if episode_pattern == "[]":
+                    save_name = f"{episode_num:02d}{file_ext}"
+                else:
+                    save_name = episode_pattern.replace("[]", f"{episode_num:02d}") + file_ext
+                return apply_subtitle_naming_rule(save_name, task)
                 
             # 找出已命名的文件列表，避免重复转存
             existing_episode_numbers = set()
@@ -5016,15 +5148,7 @@ class Quark:
                             file_ext = os.path.splitext(original_name)[1]
                             
                             # 构建可能的新文件名
-                            if episode_num is not None:
-                                if episode_pattern == "[]":
-                                    new_name = f"{episode_num:02d}{file_ext}"
-                                else:
-                                    new_name = episode_pattern.replace("[]", f"{episode_num:02d}") + file_ext
-                                # 应用字幕命名规则
-                                new_name = apply_subtitle_naming_rule(new_name, task)
-                            else:
-                                new_name = None
+                            new_name = build_episode_mode_save_name(original_name, episode_num)
                             
                             # 根据是否忽略后缀进行检查
                             if task.get("ignore_extension", False):
@@ -5088,18 +5212,9 @@ class Quark:
                     # 生成文件名并添加到列表
                     for share_file in sorted_files:
                         episode_num = extract_episode_number_local(share_file["file_name"])
-                        if episode_num is not None:
+                        save_name = build_episode_mode_save_name(share_file["file_name"], episode_num)
+                        if save_name:
                             # 生成新文件名
-                            file_ext = os.path.splitext(share_file["file_name"])[1]
-                            if episode_pattern == "[]":
-                                # 对于单独的[]，直接使用数字序号作为文件名
-                                save_name = f"{episode_num:02d}{file_ext}"
-                            else:
-                                save_name = episode_pattern.replace("[]", f"{episode_num:02d}") + file_ext
-                            
-                            # 应用字幕命名规则
-                            save_name = apply_subtitle_naming_rule(save_name, task)
-                            
                             # 检查过滤词
                             should_filter = False
                             effective_filterwords = get_effective_filterwords(task, CONFIG_DATA)
@@ -5148,12 +5263,7 @@ class Quark:
                             if not f.get("dir", False):
                                 fname = f["file_name"]
                                 ep_num = extract_episode_number_local(fname)
-                                if ep_num is not None:
-                                    ext = os.path.splitext(fname)[1]
-                                    save_name = episode_pattern.replace("[]", f"{ep_num:02d}") + ext if episode_pattern != "[]" else f"{ep_num:02d}{ext}"
-                                    save_name = apply_subtitle_naming_rule(save_name, task)
-                                else:
-                                    save_name = fname
+                                save_name = build_episode_mode_save_name(fname, ep_num) or fname
                                 need_save_list.append({"file_name": fname, "original_name": fname, "save_name": save_name})
                     
                     # 保存文件（自动解压产生的子目录跳过保存与解压），或仅执行重命名
@@ -5236,18 +5346,7 @@ class Quark:
                                                             # 关键修复：为解压出的文件生成正确的 save_name（根据剧集命名规则）
                                                             moved_file_name = moved_file["file_name"]
                                                             episode_num = extract_episode_number_local(moved_file_name)
-                                                            if episode_num is not None:
-                                                                # 根据剧集命名规则生成 save_name
-                                                                file_ext = os.path.splitext(moved_file_name)[1]
-                                                                if episode_pattern == "[]":
-                                                                    save_name = f"{episode_num:02d}{file_ext}"
-                                                                else:
-                                                                    save_name = episode_pattern.replace("[]", f"{episode_num:02d}") + file_ext
-                                                                # 应用字幕命名规则
-                                                                save_name = apply_subtitle_naming_rule(save_name, task)
-                                                            else:
-                                                                # 无法提取剧集号，使用原文件名
-                                                                save_name = moved_file_name
+                                                            save_name = build_episode_mode_save_name(moved_file_name, episode_num) or moved_file_name
                                                             
                                                             items_to_add_ep.append({
                                                                 "fid": moved_file["fid"],
@@ -5306,32 +5405,33 @@ class Quark:
                         # 创建一个列表来收集所有重命名操作
                         rename_operations = []
                         
-                        # 首先尝试使用剧集号进行智能匹配
-                        for dir_file in fresh_dir_file_list:
-                            if dir_file["dir"]:
-                                continue
-                            # 从文件名中提取剧集号
-                            episode_num = extract_episode_number_local(dir_file["file_name"])
-                            if episode_num is None:
-                                continue
-                            
-                            # 查找对应的目标文件
-                            for saved_item in need_save_list:
-                                saved_episode_num = extract_episode_number_local(saved_item["original_name"])
-                                if saved_episode_num == episode_num:
-                                    # 关键修复：防止将视频文件错误匹配到压缩文件项
-                                    if self.is_archive_file(dir_file["file_name"]) != self.is_archive_file(saved_item["original_name"]):
-                                        continue
-                                    target_name = saved_item["save_name"]
-                                    if target_name not in [f["file_name"] for f in fresh_dir_file_list]:
-                                        rename_operations.append((dir_file, target_name, episode_num))
-                                        break
-                                    else:
-                                        name_base, ext = os.path.splitext(target_name)
-                                        alt_name = f"{name_base} ({episode_num}){ext}"
-                                        if alt_name not in [f["file_name"] for f in fresh_dir_file_list]:
-                                            rename_operations.append((dir_file, alt_name, episode_num))
+                        # 首先尝试使用剧集号进行智能匹配。综艺同一期可能有多个分段/版本，改走下面的原名精确匹配。
+                        if not is_variety_episode_task:
+                            for dir_file in fresh_dir_file_list:
+                                if dir_file["dir"]:
+                                    continue
+                                # 从文件名中提取剧集号
+                                episode_num = extract_episode_number_local(dir_file["file_name"])
+                                if episode_num is None:
+                                    continue
+
+                                # 查找对应的目标文件
+                                for saved_item in need_save_list:
+                                    saved_episode_num = extract_episode_number_local(saved_item["original_name"])
+                                    if saved_episode_num == episode_num:
+                                        # 关键修复：防止将视频文件错误匹配到压缩文件项
+                                        if self.is_archive_file(dir_file["file_name"]) != self.is_archive_file(saved_item["original_name"]):
+                                            continue
+                                        target_name = saved_item["save_name"]
+                                        if target_name not in [f["file_name"] for f in fresh_dir_file_list]:
+                                            rename_operations.append((dir_file, target_name, episode_num))
                                             break
+                                        else:
+                                            name_base, ext = os.path.splitext(target_name)
+                                            alt_name = f"{name_base} ({episode_num}){ext}"
+                                            if alt_name not in [f["file_name"] for f in fresh_dir_file_list]:
+                                                rename_operations.append((dir_file, alt_name, episode_num))
+                                                break
                         
                         # 对于未能通过剧集号匹配的文件，尝试使用文件名匹配
                         for dir_file in fresh_dir_file_list:
@@ -5344,7 +5444,7 @@ class Quark:
                                 if self.is_archive_file(dir_file["file_name"]) != self.is_archive_file(saved_item["original_name"]):
                                     continue
                                 target_name = saved_item["save_name"]
-                                episode_num = extract_episode_number_local(saved_item["original_name"]) or 9999
+                                episode_num = sort_file_by_name(saved_item["original_name"]) if is_variety_episode_task else (extract_episode_number_local(saved_item["original_name"]) or 9999)
                                 if target_name not in [f["file_name"] for f in fresh_dir_file_list]:
                                     rename_operations.append((dir_file, target_name, episode_num))
                                 continue
@@ -5354,14 +5454,14 @@ class Quark:
                                     if self.is_archive_file(dir_file["file_name"]) != self.is_archive_file(saved_item["original_name"]):
                                         continue
                                     target_name = saved_item["save_name"]
-                                    episode_num = extract_episode_number_local(saved_item["original_name"]) or 9999
+                                    episode_num = sort_file_by_name(saved_item["original_name"]) if is_variety_episode_task else (extract_episode_number_local(saved_item["original_name"]) or 9999)
                                     if target_name not in [f["file_name"] for f in fresh_dir_file_list]:
                                         rename_operations.append((dir_file, target_name, episode_num))
                                         original_name_to_item.pop(prefix, None)
                                         break
                         
                         # 按剧集号排序重命名操作
-                        rename_operations.sort(key=lambda x: x[2])
+                        rename_operations.sort(key=lambda x: _rename_sort_value(x[2]))
                         
                         # 执行排序后的重命名操作，收集到分支共用的 rename_logs
                         renamed_count = 0
@@ -5410,29 +5510,21 @@ class Quark:
 
                 # 检查是否需要重命名
                 episode_num = extract_episode_number_local(dir_file["file_name"])
+                variety_name = build_episode_mode_save_name(dir_file["file_name"], episode_num) if is_variety_episode_task else None
+                if variety_name:
+                    if dir_file["file_name"] != variety_name:
+                        rename_operations.append((dir_file, variety_name, sort_file_by_name(dir_file["file_name"])))
+                    continue
+
                 if episode_num is not None:
                     # 根据剧集命名模式生成目标文件名
-                    file_ext = os.path.splitext(dir_file["file_name"])[1]
-                    if episode_pattern == "[]":
-                        # 使用完整的剧集号识别逻辑，而不是简单的纯数字判断
-                        # 生成新文件名
-                        new_name = f"{episode_num:02d}{file_ext}"
-                        # 应用字幕命名规则
-                        new_name = apply_subtitle_naming_rule(new_name, task)
-                        # 只有当当前文件名与目标文件名不同时才重命名
-                        if dir_file["file_name"] != new_name:
-                            rename_operations.append((dir_file, new_name, episode_num))
-                    else:
-                        # 生成目标文件名
-                        new_name = episode_pattern.replace("[]", f"{episode_num:02d}") + file_ext
-                        # 应用字幕命名规则
-                        new_name = apply_subtitle_naming_rule(new_name, task)
-                        # 检查文件名是否已经符合目标格式
-                        if dir_file["file_name"] != new_name:
-                            rename_operations.append((dir_file, new_name, episode_num))
+                    new_name = build_episode_mode_save_name(dir_file["file_name"], episode_num)
+                    # 检查文件名是否已经符合目标格式
+                    if new_name and dir_file["file_name"] != new_name:
+                        rename_operations.append((dir_file, new_name, episode_num))
             
             # 按剧集号排序
-            rename_operations.sort(key=lambda x: x[2])
+            rename_operations.sort(key=lambda x: _rename_sort_value(x[2]))
 
             # 执行重命名操作，但不立即打印日志
             for dir_file, new_name, _ in rename_operations:

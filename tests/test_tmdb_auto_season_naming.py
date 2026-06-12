@@ -87,6 +87,116 @@ class TMDBAutoSeasonNamingTest(unittest.TestCase):
         self.assertEqual(task["episode_naming"], "Doupo - S05E[]")
         self.assertTrue(any("S05E01" in item for item in logs))
 
+    def test_build_variety_episode_name_keeps_issue_segment_and_bonus_labels(self):
+        cases = [
+            (
+                "20260604.第7期尝鲜.mp4",
+                "超燃青春的合唱 - S01E07 - 尝鲜.mp4",
+            ),
+            (
+                "20260605.第7期上.mp4",
+                "超燃青春的合唱 - S01E07 - 上.mp4",
+            ),
+            (
+                "20260605.第7期中.mp4",
+                "超燃青春的合唱 - S01E07 - 中.mp4",
+            ),
+            (
+                "20260605.第7期下.mp4",
+                "超燃青春的合唱 - S01E07 - 下.mp4",
+            ),
+            (
+                "20260606.纯享版.mp4",
+                "超燃青春的合唱 - S01 - 20260606 - 纯享版.mp4",
+            ),
+            (
+                "20260610.未播.mp4",
+                "超燃青春的合唱 - S01 - 20260610 - 未播.mp4",
+            ),
+        ]
+
+        for filename, expected in cases:
+            with self.subTest(filename=filename):
+                self.assertEqual(
+                    quark_auto_save.build_variety_episode_name(
+                        "超燃青春的合唱",
+                        1,
+                        filename,
+                    ),
+                    expected,
+                )
+
+    def test_do_rename_task_uses_variety_naming_for_variety_tasks(self):
+        account = EpisodeRenameQuark([
+            {
+                "fid": "f1",
+                "file_name": "20260604.第7期尝鲜.mp4",
+                "dir": False,
+                "size": 1000,
+                "updated_at": 100,
+            },
+            {
+                "fid": "f2",
+                "file_name": "20260605.第7期上.mp4",
+                "dir": False,
+                "size": 1001,
+                "updated_at": 101,
+            },
+            {
+                "fid": "f3",
+                "file_name": "20260606.纯享版.mp4",
+                "dir": False,
+                "size": 1002,
+                "updated_at": 102,
+            },
+        ])
+        task = {
+            "taskname": "超燃青春的合唱",
+            "savepath": "影视库/电视剧/综艺/超燃青春的合唱/Season 01",
+            "use_episode_naming": True,
+            "episode_naming": "超燃青春的合唱 - S01E[]",
+            "matched_latest_season_number": 1,
+            "library_category": "综艺",
+        }
+
+        renamed, logs = account.do_rename_task(task)
+
+        self.assertTrue(renamed)
+        self.assertEqual(
+            account.rename_calls,
+            [
+                ("f1", "超燃青春的合唱 - S01E07 - 尝鲜.mp4"),
+                ("f2", "超燃青春的合唱 - S01E07 - 上.mp4"),
+                ("f3", "超燃青春的合唱 - S01 - 20260606 - 纯享版.mp4"),
+            ],
+        )
+        self.assertTrue(any("S01E07 - 尝鲜" in item for item in logs))
+        self.assertTrue(any("20260606 - 纯享版" in item for item in logs))
+
+    def test_do_rename_task_keeps_regular_tv_naming_unchanged(self):
+        account = EpisodeRenameQuark([
+            {
+                "fid": "file-1",
+                "file_name": "Show.E07.mp4",
+                "dir": False,
+                "size": 1000,
+                "updated_at": 100,
+            }
+        ])
+        task = {
+            "taskname": "Show",
+            "savepath": "Shows",
+            "use_episode_naming": True,
+            "episode_naming": "Show - S01E[]",
+            "matched_latest_season_number": 1,
+            "library_category": "国产剧",
+        }
+
+        renamed, _logs = account.do_rename_task(task)
+
+        self.assertTrue(renamed)
+        self.assertEqual(account.rename_calls, [("file-1", "Show - S01E07.mp4")])
+
 
 if __name__ == "__main__":
     unittest.main()
