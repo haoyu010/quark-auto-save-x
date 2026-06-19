@@ -26,6 +26,24 @@ def test_navbar_toolbar_uses_clear_modern_icons():
     index = INDEX.read_text(encoding="utf-8")
 
     assert "Workbench toolbar polish" in css
-    assert '<i class="bi bi-floppy2"></i>' in index
+    assert '<i class="bi bi-cloud-arrow-up"></i>' in index
     assert '<i class="bi bi-play-fill"></i>' in index
     assert '<i class="bi bi-arrow-down-up"></i>' in index
+
+
+def test_workbench_v5_polishes_global_ui_surfaces():
+    css = CSS.read_text(encoding="utf-8")
+    index = INDEX.read_text(encoding="utf-8")
+
+    assert "Workbench Refresh v5" in css
+    assert "tasklist-workbench-page" in index
+    assert "toolbar-action-save" in index
+    assert "toolbar-action-run" in index
+    assert "toolbar-action-scroll" in index
+    assert "toolbar-action-width" in index
+    assert ".navbar-action-btn.toolbar-action-save" in css
+    assert ".tasklist-workbench-page .task-dashboard-hero" in css
+    assert ".config-workbench-page .row.title::after" in css
+    assert ".config-workbench-page .notify-panel-main" in css
+    assert ".discovery-page-shell .discovery-search-panel" in css
+    assert ".tasklist-poster-mode .discovery-poster::after" in css
