@@ -47,3 +47,19 @@ def test_workbench_v5_polishes_global_ui_surfaces():
     assert ".config-workbench-page .notify-panel-main" in css
     assert ".discovery-page-shell .discovery-search-panel" in css
     assert ".tasklist-poster-mode .discovery-poster::after" in css
+
+
+def test_config_page_uses_dropdown_accordion_sections():
+    css = CSS.read_text(encoding="utf-8")
+    index = INDEX.read_text(encoding="utf-8")
+
+    assert "Config Accordion v1" in css
+    assert "refreshConfigAccordion()" in index
+    assert "handleConfigAccordionClick(event)" in index
+    assert "setConfigAccordionOpen(title, isOpen)" in index
+    assert "config-accordion-title" in index
+    assert "config-accordion-toggle" in index
+    assert ".config-workbench-page .row.title.config-accordion-title" in css
+    assert ".config-workbench-page .config-accordion-title.is-open" in css
+    assert ".config-workbench-page .config-accordion-content[hidden]" in css
+    assert ".config-workbench-page .config-accordion-toggle" in css

@@ -13919,3 +13919,101 @@ main .table tbody tr:hover {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* --------------- Config Accordion v1 --------------- */
+.config-workbench-page .row.title.config-accordion-title {
+  cursor: pointer;
+  user-select: none;
+  padding-right: 54px !important;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.config-workbench-page .row.title.config-accordion-title:hover {
+  border-color: rgba(37, 99, 235, 0.28) !important;
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.12), rgba(15, 118, 110, 0.08) 42%, #ffffff 100%) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045) !important;
+  transform: translateY(-1px);
+}
+
+.config-workbench-page .row.title.config-accordion-title:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14) !important;
+}
+
+.config-workbench-page .config-accordion-title.is-open {
+  border-color: rgba(37, 99, 235, 0.34) !important;
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.14), rgba(20, 184, 166, 0.09) 44%, #ffffff 100%) !important;
+}
+
+.config-workbench-page .config-accordion-title.is-open h2 {
+  color: #0f172a !important;
+}
+
+.config-workbench-page .config-accordion-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--qasx-v5-blue);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.config-workbench-page .config-accordion-toggle i {
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.config-workbench-page .config-accordion-title.is-open .config-accordion-toggle i {
+  transform: rotate(180deg);
+}
+
+.config-workbench-page .config-accordion-content {
+  animation: qasx-config-accordion-in 0.16s ease both;
+}
+
+.config-workbench-page .config-accordion-content[hidden] {
+  display: none !important;
+}
+
+.config-workbench-page .config-accordion-title:not(.is-open) {
+  margin-bottom: 8px !important;
+}
+
+.config-workbench-page .config-accordion-title:not(.is-open) .badge {
+  opacity: 0.72;
+}
+
+@keyframes qasx-config-accordion-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .config-workbench-page .row.title.config-accordion-title {
+    padding-right: 48px !important;
+  }
+
+  .config-workbench-page .config-accordion-toggle {
+    right: 10px;
+    width: 28px;
+    height: 28px;
+  }
+}

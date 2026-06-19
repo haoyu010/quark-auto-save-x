@@ -9126,6 +9126,10 @@
             $('#sidebarMenu').collapse('toggle')
           }
 
+          if (tab === 'config') {
+            this.$nextTick(() => this.refreshConfigAccordion());
+          }
+
           // 当切换到任务列表标签时刷新任务最新信息和元数据
           if (tab === 'tasklist') {
             // 并行加载数据，提高加载速度
@@ -9180,6 +9184,63 @@
             // 添加窗口大小变化监听器，自动调整列数
             this.addCalendarResizeListener();
           }
+        },
+        refreshConfigAccordion() {
+          this.$nextTick(() => {
+            const page = document.querySelector('.config-workbench-page');
+            if (!page) return;
+            const titles = Array.from(page.children).filter(el => {
+              return el.classList && el.classList.contains('row') && el.classList.contains('title');
+            });
+            titles.forEach((title, index) => {
+              title.classList.add('config-accordion-title');
+              title.setAttribute('role', 'button');
+              title.setAttribute('tabindex', '0');
+              title.dataset.configAccordionIndex = String(index);
+              if (!title.querySelector(':scope > .config-accordion-toggle')) {
+                const toggle = document.createElement('span');
+                toggle.className = 'config-accordion-toggle';
+                toggle.setAttribute('aria-hidden', 'true');
+                toggle.innerHTML = '<i class="bi bi-chevron-down"></i>';
+                title.appendChild(toggle);
+              }
+              let saved = null;
+              try {
+                saved = localStorage.getItem(`quarkAutoSave_configAccordion_${index}`);
+              } catch (e) {}
+              const isOpen = saved === null ? index === 0 : saved === 'open';
+              this.setConfigAccordionOpen(title, isOpen);
+            });
+          });
+        },
+        setConfigAccordionOpen(title, isOpen) {
+          if (!title) return;
+          const index = title.dataset.configAccordionIndex || '0';
+          title.classList.toggle('is-open', !!isOpen);
+          title.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+          let sectionNode = title.nextElementSibling;
+          while (sectionNode && !(sectionNode.classList && sectionNode.classList.contains('row') && sectionNode.classList.contains('title'))) {
+            sectionNode.classList.add('config-accordion-content');
+            sectionNode.hidden = !isOpen;
+            sectionNode = sectionNode.nextElementSibling;
+          }
+          try {
+            localStorage.setItem(`quarkAutoSave_configAccordion_${index}`, isOpen ? 'open' : 'closed');
+          } catch (e) {}
+        },
+        handleConfigAccordionClick(event) {
+          const title = event.target.closest('.config-workbench-page > .row.title');
+          if (!title) return;
+          if (event.target.closest('a, button, input, select, textarea, label')) return;
+          event.preventDefault();
+          this.setConfigAccordionOpen(title, !title.classList.contains('is-open'));
+        },
+        handleConfigAccordionKeydown(event) {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          const title = event.target.closest('.config-workbench-page > .row.title');
+          if (!title) return;
+          event.preventDefault();
+          this.setConfigAccordionOpen(title, !title.classList.contains('is-open'));
         },
         checkNewVersion() {
           // 移除本地版本中的v前缀
@@ -9263,6 +9324,7 @@
                   this.taskDirs.push(parentDir);
               });
               this.newTask.addition = {};
+              this.$nextTick(() => this.refreshConfigAccordion());
               // --- 新增：预加载追剧日历任务元数据，支持任务列表直接显示 season_counts / matched_status ---
               axios.get('/api/calendar/tasks')
                 .then(res => {
@@ -17152,6 +17214,8 @@
         document.addEventListener('click', this.handleOutsideClick);
         document.addEventListener('click', this.handleModalOutsideClick);
         document.addEventListener('click', this.handleFileManagerOutsideClick);
+        document.addEventListener('click', this.handleConfigAccordionClick);
+        document.addEventListener('keydown', this.handleConfigAccordionKeydown);
         
         // 添加模态框关闭事件监听
         $('#fileSelectModal').on('hidden.bs.modal', () => {
@@ -17282,6 +17346,7 @@
         $('#fileSelectModal').on('shown.bs.modal', this.checkPreviewScrollbar);
         // 监听窗口大小改变，重新检查滚动条状态
         window.addEventListener('resize', this.checkPreviewScrollbar);
+        this.$nextTick(() => this.refreshConfigAccordion());
         
         // 初始化时检查所有任务的命名模式
         setTimeout(() => {
@@ -17372,6 +17437,8 @@
         // 移除点击事件监听器
         document.removeEventListener('click', this.handleOutsideClick);
         document.removeEventListener('click', this.handleRenameOutsideClick);
+        document.removeEventListener('click', this.handleConfigAccordionClick);
+        document.removeEventListener('keydown', this.handleConfigAccordionKeydown);
         
         // 移除日历页面resize监听器
         if (this.calendarResizeHandler) {
