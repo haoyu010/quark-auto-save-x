@@ -1,6 +1,6 @@
 services:
   quark-auto-save-x:
-    image: ghcr.io/haoyu010/quark-auto-save-x:v1.0.37
+    image: ghcr.io/haoyu010/quark-auto-save-x:v1.0.38
     container_name: quark-auto-save-x
     ports:
       - "5005:5005"

@@ -1347,6 +1347,238 @@ def get_task_tmdb_season_number(task):
                     return season
     return None
 
+def get_task_tmdb_id(task):
+    if not isinstance(task, dict):
+        return None
+
+    for key in ("match_tmdb_id", "tmdb_id", "matched_tmdb_id"):
+        tmdb_id = _positive_int(task.get(key))
+        if tmdb_id:
+            return tmdb_id
+
+    calendar_info = task.get("calendar_info") or {}
+    if isinstance(calendar_info, dict):
+        match = calendar_info.get("match") or {}
+        for source in (match, calendar_info):
+            if not isinstance(source, dict):
+                continue
+            for key in ("tmdb_id", "match_tmdb_id", "matched_tmdb_id"):
+                tmdb_id = _positive_int(source.get(key))
+                if tmdb_id:
+                    return tmdb_id
+    return None
+
+def _positive_count_from_mapping(mapping, keys):
+    if not isinstance(mapping, dict):
+        return None
+    for key in keys:
+        value = _positive_int(mapping.get(key))
+        if value:
+            return value
+    return None
+
+def resolve_task_saved_episode_floor(task, config_data=None):
+    """Infer saved progress from task metadata when an account object is unavailable."""
+    if not isinstance(task, dict):
+        return None
+
+    saved_floor = get_auto_replace_saved_episode_floor(task)
+    if saved_floor is not None:
+        return saved_floor
+
+    season_counts = task.get("season_counts") or {}
+    transferred = _positive_count_from_mapping(
+        season_counts,
+        ("transferred_count", "saved_count", "current_count", "progress_count"),
+    )
+    if transferred:
+        return transferred
+
+    transferred = _positive_count_from_mapping(
+        task,
+        ("transferred_count", "saved_count", "current_episode", "latest_episode"),
+    )
+    if transferred:
+        return transferred
+
+    task_name = task.get("taskname") or task.get("task_name") or ""
+    if task_name:
+        db = None
+        try:
+            db = CalendarDB()
+            conn = getattr(db, "conn", None)
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT transferred_count FROM task_metrics WHERE task_name=?",
+                    (task_name,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    transferred = _positive_int(row[0])
+                    if transferred:
+                        return transferred
+        except Exception:
+            pass
+        finally:
+            try:
+                if db and hasattr(db, "close"):
+                    db.close()
+            except Exception:
+                pass
+    return None
+
+def _tmdb_total_from_task_fields(task):
+    season_counts = task.get("season_counts") or {}
+    total = _positive_count_from_mapping(
+        season_counts,
+        ("total_count", "episode_count", "total_episode_count"),
+    )
+    if total:
+        return total
+
+    calendar_info = task.get("calendar_info") or {}
+    extracted = calendar_info.get("extracted") or {} if isinstance(calendar_info, dict) else {}
+    for source in (task, calendar_info, extracted):
+        total = _positive_count_from_mapping(
+            source,
+            ("total_count", "episode_count", "total_episode_count"),
+        )
+        if total:
+            return total
+    return None
+
+def _tmdb_total_from_calendar_cache(tmdb_id, season_number):
+    db = None
+    try:
+        db = CalendarDB()
+        if hasattr(db, "get_season"):
+            season = db.get_season(int(tmdb_id), int(season_number)) or {}
+            total = _positive_int(season.get("episode_count"))
+            if total:
+                return total
+        if hasattr(db, "get_season_metrics"):
+            metrics = db.get_season_metrics(int(tmdb_id), int(season_number)) or {}
+            total = _positive_int(metrics.get("total_count"))
+            if total:
+                return total
+    except Exception:
+        return None
+    finally:
+        try:
+            if db and hasattr(db, "close"):
+                db.close()
+        except Exception:
+            pass
+    return None
+
+def _tmdb_total_from_api(task, config_data, tmdb_id, season_number):
+    config_data = config_data or CONFIG_DATA
+    api_key = str((config_data or {}).get("tmdb_api_key") or "").strip()
+    if not api_key:
+        return None
+    try:
+        from app.sdk.tmdb_service import TMDBService
+    except ImportError:
+        try:
+            from sdk.tmdb_service import TMDBService
+        except ImportError:
+            return None
+
+    try:
+        service = TMDBService(
+            api_key,
+            (config_data or {}).get("poster_language", "zh-CN"),
+            request_timeout=float((config_data or {}).get("tmdb_completed_timeout", 2.5)),
+            max_retries=1,
+        )
+        details = service.get_tv_show_details(int(tmdb_id)) or {}
+        for season in details.get("seasons") or []:
+            if _positive_int(season.get("season_number")) == int(season_number):
+                total = _positive_int(season.get("episode_count"))
+                if total:
+                    return total
+
+        if hasattr(service, "get_tv_show_episodes"):
+            season_detail = service.get_tv_show_episodes(int(tmdb_id), int(season_number)) or {}
+            total = _positive_int(season_detail.get("episode_count"))
+            if total:
+                return total
+            episodes = season_detail.get("episodes") or []
+            if episodes:
+                return len(episodes)
+    except Exception as e:
+        print(f"TMDB completed episode count lookup failed: {e}")
+    return None
+
+def resolve_task_tmdb_total_episode_count(task, config_data=None):
+    """Resolve current TMDB season total episodes from task fields, cache, then API."""
+    if not isinstance(task, dict):
+        return None
+
+    total = _tmdb_total_from_task_fields(task)
+    if total:
+        return total
+
+    tmdb_id = get_task_tmdb_id(task)
+    season_number = get_task_tmdb_season_number(task)
+    if not tmdb_id or not season_number:
+        return None
+
+    total = _tmdb_total_from_calendar_cache(tmdb_id, season_number)
+    if total:
+        return total
+
+    return _tmdb_total_from_api(task, config_data or CONFIG_DATA, tmdb_id, season_number)
+
+def is_task_completed_by_tmdb_episode_count(
+    task,
+    config_data=None,
+    progress_resolver=None,
+    total_resolver=None,
+):
+    """Return True only when TMDB total episodes and saved progress prove completion."""
+    if not isinstance(task, dict):
+        return False
+    resolver = progress_resolver or resolve_task_saved_episode_floor
+    total_lookup = total_resolver or resolve_task_tmdb_total_episode_count
+
+    try:
+        saved_floor = _positive_int(resolver(task))
+    except Exception as e:
+        print(f"completed progress lookup failed: {e}")
+        saved_floor = None
+    if not saved_floor:
+        return False
+
+    try:
+        total = _positive_int(total_lookup(task, config_data or CONFIG_DATA))
+    except TypeError:
+        total = _positive_int(total_lookup(task))
+    except Exception as e:
+        print(f"completed total lookup failed: {e}")
+        total = None
+    if not total:
+        return False
+
+    return saved_floor >= total
+
+def is_completed_task_for_invalid_share(
+    task,
+    config_data=None,
+    progress_resolver=None,
+    total_resolver=None,
+):
+    """Whether invalid-share handling should stay quiet because the media is complete."""
+    if is_movie_task(task):
+        return True
+    return is_task_completed_by_tmdb_episode_count(
+        task,
+        config_data or CONFIG_DATA,
+        progress_resolver=progress_resolver,
+        total_resolver=total_resolver,
+    )
+
 def _extract_tmdb_search_year(*values):
     for value in values:
         match = re.search(r"(?:19|20)\d{2}", str(value or ""))
@@ -3420,6 +3652,8 @@ class Quark:
 
     def try_auto_replace_invalid_shareurl(self, task, reason=""):
         """尝试为失效任务自动搜索并替换新的分享链接。"""
+        if self.is_completed_invalid_share_task(task):
+            return {"attempted": False, "replaced": False, "message": "任务已完结，跳过自动换源"}
         if task_auto_replace_disabled(task):
             return {"attempted": False, "replaced": False, "message": "任务已禁用自动换源"}
         try:
@@ -3465,6 +3699,8 @@ class Quark:
         """自动换源成功后重试一次转存，避免递归循环。"""
         if task.get("_auto_replace_retrying"):
             return False, None
+        if self.is_completed_invalid_share_task(task):
+            return False, None
         if task_auto_replace_disabled(task):
             return False, None
         result = self.try_auto_replace_invalid_shareurl(task, reason)
@@ -3478,9 +3714,29 @@ class Quark:
             task.pop("_auto_replace_saved_episode_floor", None)
             task.pop("_auto_replace_ignore_startfid_once", None)
 
+    def is_completed_invalid_share_task(self, task):
+        return is_completed_task_for_invalid_share(
+            task,
+            CONFIG_DATA,
+            progress_resolver=self.get_saved_episode_floor_for_task,
+            total_resolver=resolve_task_tmdb_total_episode_count,
+        )
+
+    def log_completed_invalid_share_skip(self, task, reason=""):
+        message = (
+            f"《{task.get('taskname', '')}》已按 TMDB/本地进度判定完结，"
+            f"分享失效不再提醒/换源"
+        )
+        if reason:
+            message = f"{message}: {reason}"
+        print(message)
+
     def do_save_task(self, task):
         # 判断资源失效记录
         if task.get("shareurl_ban"):
+            if self.is_completed_invalid_share_task(task):
+                self.log_completed_invalid_share_skip(task, task.get("shareurl_ban"))
+                return
             replaced, retry_tree = self.retry_save_after_auto_replace(task, task.get("shareurl_ban"))
             if replaced:
                 return retry_tree
@@ -3513,6 +3769,9 @@ class Quark:
                 pass
             # 非可恢复错误，按失效处理
             task["shareurl_ban"] = stoken
+            if self.is_completed_invalid_share_task(task):
+                self.log_completed_invalid_share_skip(task, stoken)
+                return
             replaced, retry_tree = self.retry_save_after_auto_replace(task, stoken)
             if replaced:
                 return retry_tree
@@ -3527,6 +3786,9 @@ class Quark:
                 return  # 直接返回，不设置 shareurl_ban
             else:
                 task["shareurl_ban"] = self.format_unrecoverable_error(error_text) if hasattr(self, 'format_unrecoverable_error') else error_text
+                if self.is_completed_invalid_share_task(task):
+                    self.log_completed_invalid_share_skip(task, task["shareurl_ban"])
+                    return
                 replaced, retry_tree = self.retry_save_after_auto_replace(task, task["shareurl_ban"])
                 if replaced:
                     return retry_tree

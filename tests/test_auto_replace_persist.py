@@ -118,6 +118,83 @@ class AutoReplacePersistTest(unittest.TestCase):
 
         self.assertEqual([item["fid"] for item in filtered], ["fid-e03", "fid-e04", "folder"])
 
+    def test_completed_tv_task_by_tmdb_episode_count_suppresses_invalid_replacement(self):
+        task = {
+            "taskname": "南部档案",
+            "content_type": "tv",
+            "matched_latest_season_number": 1,
+            "calendar_info": {
+                "match": {
+                    "tmdb_id": 12345,
+                    "latest_season_number": 1,
+                }
+            },
+        }
+        progress_resolver = lambda _task: 12
+        total_resolver = lambda _task, _config: 12
+
+        self.assertTrue(
+            quark_auto_save.is_task_completed_by_tmdb_episode_count(
+                task,
+                {},
+                progress_resolver=progress_resolver,
+                total_resolver=total_resolver,
+            )
+        )
+
+    def test_incomplete_tv_task_by_tmdb_episode_count_keeps_invalid_replacement(self):
+        task = {
+            "taskname": "追更剧",
+            "content_type": "tv",
+            "matched_latest_season_number": 1,
+            "calendar_info": {
+                "match": {
+                    "tmdb_id": 23456,
+                    "latest_season_number": 1,
+                }
+            },
+        }
+        progress_resolver = lambda _task: 10
+        total_resolver = lambda _task, _config: 12
+
+        self.assertFalse(
+            quark_auto_save.is_task_completed_by_tmdb_episode_count(
+                task,
+                {},
+                progress_resolver=progress_resolver,
+                total_resolver=total_resolver,
+            )
+        )
+
+    def test_completed_movie_task_suppresses_invalid_replacement(self):
+        task = {"taskname": "迷墙", "content_type": "movie", "movie_once": True}
+
+        self.assertTrue(quark_auto_save.is_completed_task_for_invalid_share(task, {}))
+
+    def test_completed_invalid_share_task_does_not_notify_or_replace(self):
+        class QuietCompletedQuark(quark_auto_save.Quark):
+            def __init__(self):
+                pass
+
+            def is_completed_invalid_share_task(self, task):
+                return True
+
+            def retry_save_after_auto_replace(self, task, reason=""):
+                raise AssertionError("completed task should not auto replace")
+
+        task = {
+            "taskname": "南部档案",
+            "shareurl": "https://pan.quark.cn/s/expired",
+            "shareurl_ban": "分享地址已失效",
+            "savepath": "影视库/电视剧/南部档案/Season 01",
+        }
+        quark_auto_save.NOTIFYS = []
+
+        result = QuietCompletedQuark().do_save_task(task)
+
+        self.assertIsNone(result)
+        self.assertEqual(quark_auto_save.NOTIFYS, [])
+
     def test_persist_auto_replaced_shareurl_updates_startfid_when_available(self):
         quark_auto_save.CONFIG_DATA = {
             "tasklist": [
