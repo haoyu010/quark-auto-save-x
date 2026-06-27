@@ -63,3 +63,20 @@ def test_config_page_uses_dropdown_accordion_sections():
     assert ".config-workbench-page .config-accordion-title.is-open" in css
     assert ".config-workbench-page .config-accordion-content[hidden]" in css
     assert ".config-workbench-page .config-accordion-toggle" in css
+
+
+def test_mobile_tasklist_layout_has_clean_non_overlapping_rules():
+    css = CSS.read_text(encoding="utf-8")
+
+    assert "Mobile Tasklist Refresh v1" in css
+    assert "@media (max-width: 767.98px)" in css
+    assert "body:has(.tasklist-workbench-page)" in css
+    assert ".navbar .navbar-brand" in css
+    assert ".navbar-actions" in css
+    assert ".tasklist-workbench-page .task-dashboard-hero" in css
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in css
+    assert ".tasklist-filter-row > [class*=\"col-\"]" in css
+    assert ".tasklist-workbench-page .tasklist-header-row" in css
+    assert ".tasklist-type-filter" in css
+    assert ".tasklist-sort-controls" in css
+    assert "overflow-x: auto" in css
