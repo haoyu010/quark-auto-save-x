@@ -15496,3 +15496,108 @@ main .table thead th {
     min-width: 38px !important;
   }
 }
+
+
+/* --------------- Runlog Contrast Fix v1 --------------- */
+:root {
+  --runlog-text: #1f2937;
+  --runlog-muted: #475569;
+  --runlog-info: #1565c0;
+  --runlog-success: #15803d;
+  --runlog-warning: #b45309;
+  --runlog-error: #dc2626;
+  --runlog-bg: #ffffff;
+  --runlog-line-bg-hover: #f8fafc;
+}
+
+.runlog-content {
+  border: 1px solid rgba(15, 23, 42, 0.10) !important;
+  border-radius: var(--mui-radius-xl, 24px) !important;
+  background: var(--runlog-bg) !important;
+  color: var(--runlog-text) !important;
+  box-shadow: var(--mui-shadow-1, 0 1px 3px rgba(16, 24, 40, 0.10)) !important;
+}
+
+.runlog-content,
+.runlog-content * {
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+.runlog-content .runlog-line {
+  min-height: 28px;
+  padding: 4px 12px !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.045) !important;
+  color: var(--runlog-text) !important;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, Monaco, monospace !important;
+  font-size: 0.92rem !important;
+  font-weight: 650 !important;
+  line-height: 1.55 !important;
+}
+
+.runlog-content .runlog-line:hover {
+  background: var(--runlog-line-bg-hover) !important;
+}
+
+.runlog-content .runlog-line-meta,
+.runlog-content .runlog-line > span:first-child {
+  color: var(--runlog-muted) !important;
+  font-weight: 700 !important;
+}
+
+.runlog-content .runlog-line-message,
+.runlog-content .runlog-line span:not(.log-level-clickable) {
+  color: var(--runlog-text) !important;
+}
+
+.runlog-content .log-level-clickable {
+  color: var(--runlog-info) !important;
+  font-weight: 900 !important;
+  text-decoration: none !important;
+}
+
+.runlog-content .log-level-clickable:hover,
+.runlog-content .runtime-log-arrow-clickable:hover,
+.runlog-content .runtime-log-taskname-clickable:hover {
+  color: #0d47a1 !important;
+  text-decoration: underline !important;
+}
+
+.runlog-content .runtime-log-arrow-clickable,
+.runlog-content .runtime-log-taskname-clickable {
+  color: var(--runlog-info) !important;
+  font-weight: 800 !important;
+}
+
+.runlog-content .text-danger,
+.runlog-content .text-error,
+.runlog-content .log-error,
+.runlog-content [style*="color: red"],
+.runlog-content [style*="color:red"] {
+  color: var(--runlog-error) !important;
+  font-weight: 900 !important;
+}
+
+.runlog-content .text-success,
+.runlog-content .log-success {
+  color: var(--runlog-success) !important;
+  font-weight: 900 !important;
+}
+
+.runlog-content .text-warning,
+.runlog-content .log-warning {
+  color: var(--runlog-warning) !important;
+  font-weight: 900 !important;
+}
+
+.runlog-content .text-muted,
+.runlog-content [style*="var(--light-text-color)"] {
+  color: var(--runlog-muted) !important;
+}
+
+@media (max-width: 767.98px) {
+  .runlog-content .runlog-line {
+    font-size: 0.86rem !important;
+    padding: 5px 10px !important;
+  }
+}

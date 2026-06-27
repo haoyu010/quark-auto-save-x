@@ -132,3 +132,16 @@ def test_mui_material_refresh_overrides_global_surfaces():
     assert 'class="navbar-actions' not in index
     assert "toolbar-action-save" not in index
     assert ".navbar-actions" in css and "display: none !important" in css
+
+
+def test_runlog_page_keeps_high_contrast_on_mui_surface():
+    css = CSS.read_text(encoding="utf-8")
+
+    assert "Runlog Contrast Fix v1" in css
+    assert "--runlog-text: #1f2937" in css
+    assert "--runlog-muted: #475569" in css
+    assert "--runlog-info: #1565c0" in css
+    assert ".runlog-content .runlog-line" in css
+    assert "color: var(--runlog-text) !important" in css
+    assert ".runlog-content .log-level-clickable" in css
+    assert "color: var(--runlog-info) !important" in css
