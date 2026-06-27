@@ -80,3 +80,20 @@ def test_mobile_tasklist_layout_has_clean_non_overlapping_rules():
     assert ".tasklist-type-filter" in css
     assert ".tasklist-sort-controls" in css
     assert "overflow-x: auto" in css
+
+
+def test_glass_minimal_theme_overrides_core_surfaces():
+    css = CSS.read_text(encoding="utf-8")
+
+    assert "Glass Minimal v1" in css
+    assert "--qasx-glass-bg" in css
+    assert "--qasx-glass-blur" in css
+    assert "backdrop-filter: var(--qasx-glass-blur)" in css
+    assert ".tasklist-workbench-page .task-dashboard-hero" in css
+    assert ".tasklist-workbench-page .task," in css
+    assert ".config-workbench-page .form-group.row" in css
+    assert ".discovery-page-shell .discovery-search-panel" in css
+    assert ".modal-content" in css
+    assert ".table-responsive" in css
+    assert "@media (max-width: 767.98px)" in css
+    assert "--qasx-glass-blur: blur(8px)" in css

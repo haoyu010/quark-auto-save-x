@@ -14406,3 +14406,252 @@ main .table tbody tr:hover {
     white-space: nowrap !important;
   }
 }
+
+/* --------------- Glass Minimal v1 --------------- */
+:root {
+  --qasx-glass-page-bg:
+    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.13), transparent 30%),
+    radial-gradient(circle at 88% 8%, rgba(20, 184, 166, 0.12), transparent 30%),
+    linear-gradient(180deg, #eef4fb 0%, #f8fafc 48%, #ffffff 100%);
+  --qasx-glass-bg: rgba(255, 255, 255, 0.58);
+  --qasx-glass-bg-soft: rgba(255, 255, 255, 0.42);
+  --qasx-glass-bg-strong: rgba(255, 255, 255, 0.76);
+  --qasx-glass-nav: rgba(15, 23, 42, 0.82);
+  --qasx-glass-border: rgba(255, 255, 255, 0.44);
+  --qasx-glass-line: rgba(148, 163, 184, 0.24);
+  --qasx-glass-line-strong: rgba(59, 130, 246, 0.24);
+  --qasx-glass-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  --qasx-glass-shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.055);
+  --qasx-glass-blur: blur(14px);
+  --qasx-glass-radius: 18px;
+  --qasx-glass-radius-sm: 14px;
+  --qasx-glass-ink: #0f172a;
+  --qasx-glass-muted: #64748b;
+  --qasx-glass-blue: #2563eb;
+  --qasx-glass-teal: #0f766e;
+}
+
+body {
+  background: var(--qasx-glass-page-bg) fixed !important;
+  color: var(--qasx-glass-ink) !important;
+}
+
+.navbar.navbar-dark.bg-dark {
+  background: var(--qasx-glass-nav) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16) !important;
+  backdrop-filter: blur(18px);
+}
+
+.navbar-brand {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.navbar-brand-mark,
+.navbar-action-btn,
+.navbar-toggler-square {
+  background: rgba(255, 255, 255, 0.09) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 8px 18px rgba(2, 6, 23, 0.12) !important;
+  backdrop-filter: blur(10px);
+}
+
+.sidebar.bg-light,
+.sidebar {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.9)) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 12px 0 38px rgba(15, 23, 42, 0.14) !important;
+  backdrop-filter: blur(18px);
+}
+
+main {
+  background: transparent !important;
+}
+
+.tasklist-workbench-page .task-dashboard-hero {
+  border: 1px solid var(--qasx-glass-border) !important;
+  border-radius: 22px !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.34)) !important;
+  color: var(--qasx-glass-ink) !important;
+  box-shadow: var(--qasx-glass-shadow) !important;
+  backdrop-filter: var(--qasx-glass-blur);
+}
+
+.tasklist-workbench-page .task-dashboard-hero::after {
+  opacity: 0.18 !important;
+  background:
+    radial-gradient(circle, rgba(37, 99, 235, 0.2), transparent 58%) !important;
+}
+
+.tasklist-workbench-page .task-dashboard-copy h1,
+.tasklist-workbench-page .task-dashboard-hero .task-dashboard-copy h1 {
+  color: var(--qasx-glass-ink) !important;
+  text-shadow: none !important;
+}
+
+.tasklist-workbench-page .task-dashboard-copy p,
+.tasklist-workbench-page .task-dashboard-hero .task-dashboard-copy p {
+  color: var(--qasx-glass-muted) !important;
+}
+
+.tasklist-workbench-page .task-dashboard-eyebrow {
+  color: var(--qasx-glass-teal) !important;
+  background: rgba(15, 118, 110, 0.09) !important;
+  border: 1px solid rgba(15, 118, 110, 0.16) !important;
+}
+
+.tasklist-workbench-page .task-dashboard-metric,
+.task-dashboard-hero .task-dashboard-metric {
+  border: 1px solid var(--qasx-glass-border) !important;
+  background: var(--qasx-glass-bg-soft) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 8px 20px rgba(15, 23, 42, 0.045) !important;
+  backdrop-filter: var(--qasx-glass-blur);
+}
+
+.tasklist-workbench-page .task-dashboard-metric .metric-label,
+.task-dashboard-hero .task-dashboard-metric .metric-label {
+  color: var(--qasx-glass-muted) !important;
+}
+
+.tasklist-workbench-page .task-dashboard-metric strong,
+.task-dashboard-hero .task-dashboard-metric strong {
+  color: var(--qasx-glass-ink) !important;
+}
+
+.tasklist-workbench-page .tasklist-filter-row,
+.tasklist-workbench-page .task,
+.tasklist-workbench-page .tasklist-poster-mode .discovery-card,
+.config-workbench-page .form-group.row,
+.config-workbench-page .row.mb-2,
+.config-workbench-page .performance-setting-row,
+.config-workbench-page .display-setting-row,
+.config-workbench-page .task-auto-search-group,
+.config-workbench-page .notify-panel-main,
+.discovery-page-shell .discovery-search-panel,
+.discovery-page-shell .discovery-card,
+.calendar-task-card,
+.runlog-content,
+.table-responsive,
+.modal-content {
+  border: 1px solid var(--qasx-glass-border) !important;
+  background: var(--qasx-glass-bg) !important;
+  box-shadow: var(--qasx-glass-shadow-soft) !important;
+  backdrop-filter: var(--qasx-glass-blur);
+}
+
+.tasklist-workbench-page .task:hover,
+.discovery-page-shell .discovery-card:hover,
+.calendar-task-card:hover {
+  border-color: var(--qasx-glass-line-strong) !important;
+  box-shadow: var(--qasx-glass-shadow) !important;
+  transform: translateY(-1px);
+}
+
+.config-workbench-page .row.title,
+.config-workbench-page .row.title.config-accordion-title {
+  border: 1px solid var(--qasx-glass-border) !important;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.46)) !important;
+  box-shadow: var(--qasx-glass-shadow-soft) !important;
+  backdrop-filter: var(--qasx-glass-blur);
+}
+
+.config-workbench-page .row.title::after {
+  background: linear-gradient(180deg, var(--qasx-glass-blue), var(--qasx-glass-teal)) !important;
+}
+
+.form-control,
+select.form-control,
+textarea.form-control,
+.input-group-text,
+.task-filter-select,
+.tasklist-sort-pill,
+.tasklist-count-indicator,
+.btn,
+.dropdown-menu,
+.toast-custom {
+  border-color: var(--qasx-glass-line) !important;
+  background-color: var(--qasx-glass-bg-strong) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 6px 16px rgba(15, 23, 42, 0.035) !important;
+}
+
+.form-control,
+select.form-control,
+textarea.form-control {
+  color: var(--qasx-glass-ink) !important;
+}
+
+.input-group-text {
+  color: #334155 !important;
+}
+
+.btn-primary,
+.calendar-category-btn.active,
+.tasklist-type-filter .calendar-category-btn.active {
+  color: #ffffff !important;
+  border-color: rgba(37, 99, 235, 0.7) !important;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(14, 165, 233, 0.88)) !important;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18) !important;
+}
+
+.btn-outline-secondary,
+.btn-outline-primary,
+.btn-outline-danger,
+.btn-outline-success {
+  background: rgba(255, 255, 255, 0.58) !important;
+}
+
+.table {
+  color: var(--qasx-glass-ink) !important;
+}
+
+.table thead th,
+main .table thead th {
+  background: rgba(248, 250, 252, 0.78) !important;
+  color: #334155 !important;
+}
+
+.modal-backdrop.show {
+  opacity: 0.22 !important;
+  backdrop-filter: blur(4px);
+}
+
+@media (max-width: 767.98px) {
+  :root {
+    --qasx-glass-bg: rgba(255, 255, 255, 0.72);
+    --qasx-glass-bg-soft: rgba(255, 255, 255, 0.58);
+    --qasx-glass-bg-strong: rgba(255, 255, 255, 0.86);
+    --qasx-glass-shadow: 0 12px 28px rgba(15, 23, 42, 0.075);
+    --qasx-glass-shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.05);
+    --qasx-glass-blur: blur(8px);
+  }
+
+  .tasklist-workbench-page .task-dashboard-hero {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.55)) !important;
+  }
+
+  .tasklist-workbench-page .task-dashboard-copy h1,
+  .tasklist-workbench-page .task-dashboard-hero .task-dashboard-copy h1 {
+    color: var(--qasx-glass-ink) !important;
+  }
+
+  .tasklist-workbench-page .task-dashboard-copy p,
+  .tasklist-workbench-page .task-dashboard-hero .task-dashboard-copy p {
+    color: #475569 !important;
+  }
+
+  .tasklist-workbench-page .task-dashboard-metric {
+    background: rgba(255, 255, 255, 0.62) !important;
+  }
+}
