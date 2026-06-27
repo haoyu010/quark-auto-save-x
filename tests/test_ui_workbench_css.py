@@ -21,14 +21,14 @@ def test_workbench_refresh_css_exists():
     assert ".discovery-page-shell .discovery-poster" in css
 
 
-def test_navbar_toolbar_uses_clear_modern_icons():
-    css = CSS.read_text(encoding="utf-8")
+def test_old_navbar_quick_actions_are_not_rendered():
     index = INDEX.read_text(encoding="utf-8")
 
-    assert "Workbench toolbar polish" in css
-    assert '<i class="bi bi-cloud-arrow-up"></i>' in index
-    assert '<i class="bi bi-play-fill"></i>' in index
-    assert '<i class="bi bi-arrow-down-up"></i>' in index
+    assert 'class="navbar-actions' not in index
+    assert "toolbar-action-save" not in index
+    assert "toolbar-action-run" not in index
+    assert "toolbar-action-scroll" not in index
+    assert "toolbar-action-width" not in index
 
 
 def test_workbench_v5_polishes_global_ui_surfaces():
@@ -37,11 +37,6 @@ def test_workbench_v5_polishes_global_ui_surfaces():
 
     assert "Workbench Refresh v5" in css
     assert "tasklist-workbench-page" in index
-    assert "toolbar-action-save" in index
-    assert "toolbar-action-run" in index
-    assert "toolbar-action-scroll" in index
-    assert "toolbar-action-width" in index
-    assert ".navbar-action-btn.toolbar-action-save" in css
     assert ".tasklist-workbench-page .task-dashboard-hero" in css
     assert ".config-workbench-page .row.title::after" in css
     assert ".config-workbench-page .notify-panel-main" in css
@@ -72,7 +67,7 @@ def test_mobile_tasklist_layout_has_clean_non_overlapping_rules():
     assert "@media (max-width: 767.98px)" in css
     assert "body:has(.tasklist-workbench-page)" in css
     assert ".navbar .navbar-brand" in css
-    assert ".navbar-actions" in css
+    assert ".navbar-toggler-square" in css
     assert ".tasklist-workbench-page .task-dashboard-hero" in css
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in css
     assert ".tasklist-filter-row > [class*=\"col-\"]" in css
@@ -99,25 +94,41 @@ def test_glass_minimal_theme_overrides_core_surfaces():
     assert "--qasx-glass-blur: blur(8px)" in css
 
 
-def test_page_toolbar_moves_desktop_actions_into_content_area():
+def test_quick_actions_toolbar_removed_for_mui_layout():
     css = CSS.read_text(encoding="utf-8")
     index = INDEX.read_text(encoding="utf-8")
 
-    assert "Page Toolbar Neumorphic Bootstrap v1" in css
-    assert 'class="page-toolbar d-none d-md-flex"' in index
-    assert 'class="navbar-actions d-md-none"' in index
-    assert 'page-toolbar-btn toolbar-action-save' in index
-    assert 'page-toolbar-btn toolbar-action-run' in index
-    assert 'page-toolbar-btn toolbar-action-scroll' in index
-    assert 'page-toolbar-btn toolbar-action-width' in index
-    assert ".page-toolbar" in css
-    assert ".page-toolbar-btn" in css
-    assert "box-shadow:" in css
-    assert ".page-toolbar-btn:active" in css
-    assert "????" not in index
-    assert "页面快捷操作" in index
-    assert "快捷操作" in index
-    assert "保存配置" in index
-    assert "运行任务" in index
-    assert "页面滚动" in index
-    assert "页面宽度" in index
+    assert 'class="page-toolbar d-none d-md-flex"' not in index
+    assert 'class="navbar-actions' not in index
+    assert "page-toolbar-btn" not in index
+    assert "navbar-action-btn" not in index
+    assert "toolbar-action-save" not in index
+    assert "toolbar-action-run" not in index
+    assert "toolbar-action-scroll" not in index
+    assert "toolbar-action-width" not in index
+    assert "Page Toolbar Neumorphic Bootstrap v1" not in css
+    assert "Quick Actions" not in index
+    assert "\u5feb\u6377\u64cd\u4f5c" not in index
+    assert "\u5e38\u7528\u64cd\u4f5c\u6536\u8fdb\u9875\u9762" not in index
+
+def test_mui_material_refresh_overrides_global_surfaces():
+    css = CSS.read_text(encoding="utf-8")
+    index = INDEX.read_text(encoding="utf-8")
+
+    assert "MUI Material Refresh v1" in css
+    assert "--mui-primary" in css
+    assert "--mui-radius-xl" in css
+    assert "--mui-shadow-2" in css
+    assert "body" in css and "font-family" in css
+    assert ".navbar" in css
+    assert ".sidebar" in css
+    assert ".tasklist-workbench-page .task-dashboard-hero" in css
+    assert ".tasklist-workbench-page .task" in css
+    assert ".tasklist-filter-row" in css
+    assert ".form-control" in css
+    assert ".btn" in css
+    assert ".config-workbench-page .form-group.row" in css
+    assert ".discovery-page-shell" in css
+    assert 'class="navbar-actions' not in index
+    assert "toolbar-action-save" not in index
+    assert ".navbar-actions" in css and "display: none !important" in css
