@@ -97,3 +97,27 @@ def test_glass_minimal_theme_overrides_core_surfaces():
     assert ".table-responsive" in css
     assert "@media (max-width: 767.98px)" in css
     assert "--qasx-glass-blur: blur(8px)" in css
+
+
+def test_page_toolbar_moves_desktop_actions_into_content_area():
+    css = CSS.read_text(encoding="utf-8")
+    index = INDEX.read_text(encoding="utf-8")
+
+    assert "Page Toolbar Neumorphic Bootstrap v1" in css
+    assert 'class="page-toolbar d-none d-md-flex"' in index
+    assert 'class="navbar-actions d-md-none"' in index
+    assert 'page-toolbar-btn toolbar-action-save' in index
+    assert 'page-toolbar-btn toolbar-action-run' in index
+    assert 'page-toolbar-btn toolbar-action-scroll' in index
+    assert 'page-toolbar-btn toolbar-action-width' in index
+    assert ".page-toolbar" in css
+    assert ".page-toolbar-btn" in css
+    assert "box-shadow:" in css
+    assert ".page-toolbar-btn:active" in css
+    assert "????" not in index
+    assert "页面快捷操作" in index
+    assert "快捷操作" in index
+    assert "保存配置" in index
+    assert "运行任务" in index
+    assert "页面滚动" in index
+    assert "页面宽度" in index
