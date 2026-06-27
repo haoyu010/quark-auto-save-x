@@ -145,3 +145,32 @@ def test_runlog_page_keeps_high_contrast_on_mui_surface():
     assert "color: var(--runlog-text) !important" in css
     assert ".runlog-content .log-level-clickable" in css
     assert "color: var(--runlog-info) !important" in css
+
+
+def test_discovery_page_keeps_high_contrast_on_mui_surface():
+    css = CSS.read_text(encoding="utf-8")
+
+    assert "Discovery Contrast Fix v1" in css
+    assert "--discovery-text: #101828" in css
+    assert "--discovery-muted: #667085" in css
+    assert ".discovery-page-shell .discovery-hero-panel" in css
+    assert "color: var(--discovery-text) !important" in css
+    assert ".discovery-page-shell .discovery-search-types button:not(.active)" in css
+    assert "color: #344054 !important" in css
+    assert ".discovery-page-shell .discovery-search-box input" in css
+    assert ".discovery-loading-panel" in css
+    assert ".discovery-empty-panel" in css
+    assert "@media (max-width: 767.98px)" in css
+    assert ".discovery-page-shell .discovery-hero-panel" in css
+
+
+def test_discovery_page_cannot_inherit_config_accordion_hidden_state():
+    css = CSS.read_text(encoding="utf-8")
+    index = INDEX.read_text(encoding="utf-8")
+
+    assert "display: grid !important" in css
+    assert "ensureDiscoverySurfaceVisible()" in index
+    assert "while (sectionNode && sectionNode.parentElement === container" in index
+    assert "removeAttribute('hidden')" in index
+    assert ".discovery-page-shell .discovery-main-buttons" in css
+    assert "flex-wrap: wrap !important" in css

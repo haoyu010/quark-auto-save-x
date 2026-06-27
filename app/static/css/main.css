@@ -15601,3 +15601,207 @@ main .table thead th {
     padding: 5px 10px !important;
   }
 }
+
+
+/* --------------- Discovery Contrast Fix v1 --------------- */
+:root {
+  --discovery-text: #101828;
+  --discovery-muted: #667085;
+  --discovery-soft: #f8fafc;
+  --discovery-line: rgba(15, 23, 42, 0.10);
+}
+
+.discovery-page-shell {
+  color: var(--discovery-text) !important;
+}
+
+.discovery-page-shell .discovery-hero-panel {
+  display: grid !important;
+  color: var(--discovery-text) !important;
+  border-color: var(--discovery-line) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%) !important;
+}
+
+.discovery-page-shell .discovery-hero-copy,
+.discovery-page-shell .discovery-hero-copy h2,
+.discovery-page-shell .discovery-section-header h3,
+.discovery-page-shell .discovery-section-title,
+.discovery-page-shell .discovery-title {
+  color: var(--discovery-text) !important;
+  text-shadow: none !important;
+}
+
+.discovery-page-shell .discovery-kicker {
+  border: 1px solid rgba(25, 118, 210, 0.16) !important;
+  background: var(--mui-primary-soft, #e3f2fd) !important;
+  color: var(--mui-primary, #1976d2) !important;
+  font-weight: 900 !important;
+}
+
+.discovery-page-shell .discovery-hero-meta span,
+.discovery-page-shell .discovery-section-subtitle,
+.discovery-page-shell .discovery-meta,
+.discovery-page-shell .discovery-card-meta,
+.discovery-page-shell .discovery-empty-panel p,
+.discovery-page-shell .discovery-loading-panel span {
+  color: var(--discovery-muted) !important;
+  text-shadow: none !important;
+}
+
+.discovery-page-shell .discovery-hero-meta span {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  background: #ffffff !important;
+  font-weight: 760 !important;
+}
+
+.discovery-page-shell .discovery-search-panel {
+  display: flex !important;
+  color: var(--discovery-text) !important;
+  border-color: var(--discovery-line) !important;
+  background: #ffffff !important;
+}
+
+.discovery-page-shell .discovery-search-types button:not(.active),
+.discovery-page-shell .discovery-btn:not(.active) {
+  border: 1px solid rgba(15, 23, 42, 0.10) !important;
+  background: #ffffff !important;
+  color: #344054 !important;
+  font-weight: 850 !important;
+}
+
+.discovery-page-shell .discovery-search-types button:not(.active):hover,
+.discovery-page-shell .discovery-btn:not(.active):hover {
+  border-color: rgba(25, 118, 210, 0.28) !important;
+  background: #f3f8ff !important;
+  color: var(--mui-primary, #1976d2) !important;
+}
+
+.discovery-page-shell .discovery-search-types button.active,
+.discovery-page-shell .discovery-btn.active {
+  border-color: var(--mui-primary, #1976d2) !important;
+  background: var(--mui-primary, #1976d2) !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+
+.discovery-page-shell .discovery-search-box {
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  background: #ffffff !important;
+  box-shadow: var(--mui-shadow-1, 0 1px 3px rgba(16, 24, 40, 0.10)) !important;
+}
+
+.discovery-page-shell .discovery-search-box > .bi-search {
+  color: var(--mui-primary, #1976d2) !important;
+}
+
+.discovery-page-shell .discovery-search-box input {
+  color: var(--discovery-text) !important;
+  caret-color: var(--mui-primary, #1976d2) !important;
+  font-weight: 760 !important;
+}
+
+.discovery-page-shell .discovery-search-box input::placeholder {
+  color: #667085 !important;
+  opacity: 1 !important;
+}
+
+.discovery-page-shell .discovery-clear-search {
+  color: #475569 !important;
+  background: transparent !important;
+}
+
+.discovery-page-shell .discovery-search-submit {
+  background: var(--mui-primary, #1976d2) !important;
+  color: #ffffff !important;
+}
+
+.discovery-page-shell .discovery-refresh-btn {
+  border: 1px solid rgba(15, 23, 42, 0.10) !important;
+  background: #ffffff !important;
+  color: var(--mui-primary, #1976d2) !important;
+}
+
+.discovery-loading-panel,
+.discovery-empty-panel {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  background: #f8fafc !important;
+  color: var(--discovery-muted) !important;
+}
+
+.discovery-loading-panel i,
+.discovery-empty-panel i {
+  color: var(--mui-primary, #1976d2) !important;
+}
+
+.discovery-page-shell .discovery-controls,
+.discovery-page-shell .discovery-section-panel {
+  color: var(--discovery-text) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+}
+
+.discovery-page-shell .discovery-category-row,
+.discovery-page-shell .discovery-region-row {
+  color: var(--discovery-text) !important;
+}
+
+@media (max-width: 767.98px) {
+  .discovery-page-shell .discovery-hero-panel {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    padding: 16px !important;
+    min-height: 0 !important;
+  }
+
+  .discovery-page-shell .discovery-search-panel {
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .discovery-page-shell .discovery-search-types {
+    gap: 8px !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 2px !important;
+  }
+
+  .discovery-page-shell .discovery-search-types button {
+    flex: 0 0 auto !important;
+    min-height: 38px !important;
+  }
+
+  .discovery-page-shell .discovery-controls {
+    padding: 12px !important;
+    overflow: visible !important;
+  }
+
+  .discovery-page-shell .discovery-main-buttons,
+  .discovery-page-shell .discovery-sub-buttons {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    overflow: visible !important;
+    gap: 8px !important;
+  }
+
+  .discovery-page-shell .discovery-main-buttons .discovery-btn,
+  .discovery-page-shell .discovery-sub-buttons .discovery-btn {
+    flex: 0 0 auto !important;
+    min-height: 38px !important;
+    white-space: nowrap !important;
+  }
+
+  .discovery-page-shell .discovery-search-box {
+    grid-template-columns: 22px minmax(0, 1fr) auto auto !important;
+    min-height: 48px !important;
+    padding-left: 12px !important;
+  }
+
+  .discovery-page-shell .discovery-hero-copy h2 {
+    font-size: 1.55rem !important;
+  }
+
+  .discovery-loading-panel,
+  .discovery-empty-panel {
+    min-height: 220px !important;
+  }
+}

@@ -4941,6 +4941,7 @@
           }
           // 如果切换到影视发现页面，则加载榜单数据
           if (newValue === 'discovery') {
+            this.$nextTick(() => this.ensureDiscoverySurfaceVisible());
             this.loadDiscoveryData();
           }
         },
@@ -9115,6 +9116,10 @@
             this.$nextTick(() => this.refreshConfigAccordion());
           }
 
+          if (tab === 'discovery') {
+            this.$nextTick(() => this.ensureDiscoverySurfaceVisible());
+          }
+
           // 当切换到任务列表标签时刷新任务最新信息和元数据
           if (tab === 'tasklist') {
             // 并行加载数据，提高加载速度
@@ -9200,11 +9205,12 @@
         },
         setConfigAccordionOpen(title, isOpen) {
           if (!title) return;
+          const container = title.closest('.config-workbench-page');
           const index = title.dataset.configAccordionIndex || '0';
           title.classList.toggle('is-open', !!isOpen);
           title.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
           let sectionNode = title.nextElementSibling;
-          while (sectionNode && !(sectionNode.classList && sectionNode.classList.contains('row') && sectionNode.classList.contains('title'))) {
+          while (sectionNode && sectionNode.parentElement === container && !(sectionNode.classList && sectionNode.classList.contains('row') && sectionNode.classList.contains('title'))) {
             sectionNode.classList.add('config-accordion-content');
             sectionNode.hidden = !isOpen;
             sectionNode = sectionNode.nextElementSibling;
@@ -9226,6 +9232,14 @@
           if (!title) return;
           event.preventDefault();
           this.setConfigAccordionOpen(title, !title.classList.contains('is-open'));
+        },
+        ensureDiscoverySurfaceVisible() {
+          const page = document.querySelector('.discovery-page-shell');
+          if (!page) return;
+          page.removeAttribute('hidden');
+          page.querySelectorAll('[hidden]').forEach((element) => {
+            element.removeAttribute('hidden');
+          });
         },
         checkNewVersion() {
           // 移除本地版本中的v前缀
@@ -17389,6 +17403,7 @@
 
           // 如果当前是影视发现页面，加载榜单数据
           if (this.activeTab === 'discovery') {
+            this.$nextTick(() => this.ensureDiscoverySurfaceVisible());
             this.loadDiscoveryData();
           }
           
